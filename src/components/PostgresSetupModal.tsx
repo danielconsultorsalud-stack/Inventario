@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { X, Database, RefreshCw, CheckCircle, AlertTriangle, Play, Power } from "lucide-react";
+import {
+  getConnectionString,
+  saveConnectionString,
+  clearConnectionString,
+  clientCreateTables,
+  clientMigrateAllToPostgres
+} from "../utils/postgres-client";
+
+const isStaticHosting = typeof window !== "undefined" && (
+  window.location.hostname.includes("vercel") ||
+  window.location.hostname.includes("netlify") ||
+  window.location.hostname.includes("github.io") ||
+  (window.location.hostname.includes("localhost") === false &&
+   window.location.hostname.includes("127.0.0.1") === false &&
+   window.location.hostname.includes("run.app") === false)
+);
 
 interface PostgresSetupModalProps {
   isOpen: boolean;
@@ -25,6 +41,19 @@ export const PostgresSetupModal: React.FC<PostgresSetupModalProps> = ({
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const fetchStatus = async () => {
+    if (isStaticHosting) {
+      const conn = getConnectionString();
+      const statusData = {
+        connected: !!conn,
+        hasConfig: !!conn,
+        error: "",
+        connectionUrlMasked: conn ? conn.replace(/:([^:@]+)@/, ":******@") : ""
+      };
+      setStatus(statusData);
+      if (onDbStatusChange) onDbStatusChange(!!conn);
+      return;
+    }
+
     try {
       const res = await fetch("/api/postgres/status");
       if (res.ok) {
@@ -57,6 +86,25 @@ export const PostgresSetupModal: React.FC<PostgresSetupModalProps> = ({
     setFeedback(null);
 
     try {
+      if (isStaticHosting) {
+        const { Client } = await import("@neondatabase/serverless");
+        const testClient = new Client(connectionString.trim());
+        await testClient.connect();
+        await testClient.query("SELECT 1");
+        await testClient.end();
+        
+        // Save first so clientCreateTables can fetch it
+        saveConnectionString(connectionString.trim());
+        
+        // Create tables
+        await clientCreateTables();
+
+        setFeedback({ type: "success", msg: "¡Éxito! Conexión a Neon Postgres establecida y tablas creadas (Directo)." });
+        setConnectionString("");
+        await fetchStatus();
+        return;
+      }
+
       const res = await fetch("/api/postgres/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,6 +135,13 @@ export const PostgresSetupModal: React.FC<PostgresSetupModalProps> = ({
     setFeedback(null);
 
     try {
+      if (isStaticHosting) {
+        clearConnectionString();
+        setFeedback({ type: "success", msg: "Se ha desconectado de Postgres con éxito (Directo)." });
+        await fetchStatus();
+        return;
+      }
+
       const res = await fetch("/api/postgres/disconnect", { method: "POST" });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -111,6 +166,24 @@ export const PostgresSetupModal: React.FC<PostgresSetupModalProps> = ({
     setFeedback(null);
 
     try {
+      if (isStaticHosting) {
+        if (!getConnectionString()) throw new Error("Base de datos no instanciada.");
+
+        const localData = {
+          database: JSON.parse(localStorage.getItem("sia_master_v5") || "{}"),
+          componentTypes: JSON.parse(localStorage.getItem("sia_component_types_v5") || "[]"),
+          areas: JSON.parse(localStorage.getItem("sia_areas_v5") || "[]"),
+          licenses: JSON.parse(localStorage.getItem("sia_licenses_v5") || "[]"),
+          inventoryItems: JSON.parse(localStorage.getItem("sia_inventory_v5") || "[]"),
+          auditLogs: JSON.parse(localStorage.getItem("sia_audit_logs_v5") || "[]"),
+          decommissionedItems: JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]")
+        };
+        
+        await clientMigrateAllToPostgres(localData);
+        setFeedback({ type: "success", msg: "¡Migración finalizada con éxito! Todos los registros locales ya están en Neon Postgres (Directo)." });
+        return;
+      }
+
       const res = await fetch("/api/postgres/migrate", { method: "POST" });
       const data = await res.json();
       if (res.ok && data.success) {

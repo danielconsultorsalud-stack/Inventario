@@ -41,6 +41,23 @@ const DEFAULT_COMPONENT_TYPES: ComponentType[] = [
 
 const BACKEND_URL = "https://ais-pre-jfdo5yvr66rbu6sxeyrkhf-173441428768.us-west2.run.app";
 
+const isStaticHosting = typeof window !== "undefined" && (
+  window.location.hostname.includes("vercel") ||
+  window.location.hostname.includes("netlify") ||
+  window.location.hostname.includes("github.io") ||
+  (window.location.hostname.includes("localhost") === false &&
+   window.location.hostname.includes("127.0.0.1") === false &&
+   window.location.hostname.includes("run.app") === false)
+);
+
+import {
+  getConnectionString,
+  clientCreateTables,
+  clientSaveFieldToPostgres,
+  clientMigrateAllToPostgres,
+  clientLoadAllFromPostgres
+} from "./utils/postgres-client";
+
 function getApiUrl(path: string): string {
   if (
     typeof window !== "undefined" &&
@@ -188,6 +205,17 @@ export default function App() {
 
   // Real-time server sync function
   const sendUpdate = async (field: string, value: any) => {
+    if (isStaticHosting) {
+      try {
+        if (getConnectionString()) {
+          await clientSaveFieldToPostgres(field, value);
+        }
+      } catch (err) {
+        console.error(`[Postgres Direct] Failed to direct sync update for field ${field}:`, err);
+      }
+      return;
+    }
+
     try {
       await fetch(getApiUrl("/api/update"), {
         method: "POST",
@@ -271,6 +299,27 @@ export default function App() {
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
+      if (isStaticHosting) {
+        if (!getConnectionString()) throw new Error("No hay una base de datos conectada. Configúrala en el Setup de Postgres.");
+        
+        const serverData = await clientLoadAllFromPostgres();
+        isIncomingUpdate.current = true;
+        if (serverData.database) setDatabase(serverData.database);
+        if (serverData.componentTypes) setComponentTypes(serverData.componentTypes);
+        if (serverData.areas) setAreas(serverData.areas);
+        if (serverData.licenses) setLicenses(serverData.licenses);
+        if (serverData.inventoryItems) setInventoryItems(serverData.inventoryItems);
+        if (serverData.auditLogs) setAuditLogs(serverData.auditLogs);
+        if (serverData.decommissionedItems) setDecommissionedItems(serverData.decommissionedItems);
+        
+        setTimeout(() => {
+          isIncomingUpdate.current = false;
+        }, 200);
+
+        alert("¡Éxito! Se han descargado los últimos datos en tiempo real de la base de datos (Directo).");
+        return;
+      }
+
       const res = await fetch(getApiUrl("/api/data"));
       if (!res.ok) throw new Error("El servidor no recibe la petición. Asegúrate de tener el servidor de vista previa activo.");
       const serverData = await res.json();
@@ -321,6 +370,25 @@ export default function App() {
       
       const updatedLogs = [newLog, ...currentLogs].slice(0, 500);
       setAuditLogs(updatedLogs);
+
+      if (isStaticHosting) {
+        if (!getConnectionString()) throw new Error("No hay una base de datos conectada. Configúrala en el Setup de Postgres.");
+        
+        await clientMigrateAllToPostgres({
+          database,
+          componentTypes,
+          areas,
+          licenses,
+          inventoryItems,
+          auditLogs: updatedLogs,
+          decommissionedItems
+        });
+
+        setIsSaveConfirmOpen(false);
+        setCloudPasswordInput("");
+        alert("¡Éxito! Todos los datos locales se han guardado y respaldado de forma segura en la base de datos (Directo).");
+        return;
+      }
 
       const res = await fetch(getApiUrl("/api/seed"), {
         method: "POST",
@@ -443,6 +511,11 @@ export default function App() {
 
   // Check Neon Postgres Connection Status
   useEffect(() => {
+    if (isStaticHosting) {
+      const conn = getConnectionString();
+      setIsPgConnected(!!conn);
+      return;
+    }
     fetch(getApiUrl("/api/postgres/status"))
       .then((res) => res.json())
       .then((data) => {
@@ -459,6 +532,26 @@ export default function App() {
     // Pull from local node server and fallback to local SSE
     async function initLocalSync() {
       try {
+        if (isStaticHosting) {
+          if (!getConnectionString()) {
+            console.log("[Postgres Direct] Connection string not found. Using local state.");
+            return;
+          }
+          await clientCreateTables();
+          const serverData = await clientLoadAllFromPostgres();
+          if (isMounted) {
+            isIncomingUpdate.current = true;
+            setDatabase(serverData.database || {});
+            setComponentTypes(serverData.componentTypes || DEFAULT_COMPONENT_TYPES);
+            setAreas(serverData.areas || DEFAULT_AREAS);
+            setLicenses(serverData.licenses || []);
+            setInventoryItems(serverData.inventoryItems || []);
+            setAuditLogs(serverData.auditLogs || []);
+            setDecommissionedItems(serverData.decommissionedItems || []);
+          }
+          return;
+        }
+
         const res = await fetch(getApiUrl("/api/data"));
         if (!res.ok) throw new Error("Server not responding");
         const serverData = await res.json();
@@ -540,32 +633,34 @@ export default function App() {
 
     initLocalSync();
 
-    try {
-      eventSource = new EventSource(getApiUrl(`/api/events?clientId=${clientIdRef.current}`));
-      eventSource.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed.senderId !== clientIdRef.current) {
-            isIncomingUpdate.current = true;
-            
-            if (parsed.field === "database") setDatabase(parsed.value);
-            if (parsed.field === "componentTypes") setComponentTypes(parsed.value);
-            if (parsed.field === "areas") setAreas(parsed.value);
-            if (parsed.field === "licenses") setLicenses(parsed.value);
-            if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
-            if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
-            if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
+    if (!isStaticHosting) {
+      try {
+        eventSource = new EventSource(getApiUrl(`/api/events?clientId=${clientIdRef.current}`));
+        eventSource.onmessage = (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.senderId !== clientIdRef.current) {
+              isIncomingUpdate.current = true;
+              
+              if (parsed.field === "database") setDatabase(parsed.value);
+              if (parsed.field === "componentTypes") setComponentTypes(parsed.value);
+              if (parsed.field === "areas") setAreas(parsed.value);
+              if (parsed.field === "licenses") setLicenses(parsed.value);
+              if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
+              if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
+              if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
 
-            setTimeout(() => {
-              isIncomingUpdate.current = false;
-            }, 150);
+              setTimeout(() => {
+                isIncomingUpdate.current = false;
+              }, 150);
+            }
+          } catch (err) {
+            console.error("SSE parsing error:", err);
           }
-        } catch (err) {
-          console.error("SSE parsing error:", err);
-        }
-      };
-    } catch (err) {
-      console.error("Could not register SSE client:", err);
+        };
+      } catch (err) {
+        console.error("Could not register SSE client:", err);
+      }
     }
 
     return () => {
