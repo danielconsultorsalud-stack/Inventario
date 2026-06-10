@@ -157,71 +157,178 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
       await queryFn("BEGIN");
       
       if (field === "areas") {
-        await queryFn("DELETE FROM sia_areas");
-        if (Array.isArray(value)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          await queryFn("DELETE FROM sia_areas");
+        } else {
           const insertedAreas = new Set<string>();
-          for (const area of value) {
-            if (area && area.name && !insertedAreas.has(area.name)) {
-              insertedAreas.add(area.name);
-              await queryFn(
-                "INSERT INTO sia_areas (name, color) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
-                [area.name, area.color || "#cccccc"]
-              );
+          const filtered = value.filter(area => area && area.name && !insertedAreas.has(area.name));
+          
+          if (filtered.length > 0) {
+            const names = filtered.map(area => area.name);
+            const placeholders = names.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_areas WHERE name NOT IN (${placeholders})`, names);
+            
+            // Chunk inserts
+            const chunkSize = 100;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const area = chunk[i];
+                insertedAreas.add(area.name);
+                const offset = i * 2;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2})`);
+                flatValues.push(area.name, area.color || "#cccccc");
+              }
+              await queryFn(`
+                INSERT INTO sia_areas (name, color) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (name) DO UPDATE SET color = EXCLUDED.color
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_areas");
           }
         }
       } else if (field === "licenses") {
-        await queryFn("DELETE FROM sia_licenses");
-        if (Array.isArray(value)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          await queryFn("DELETE FROM sia_licenses");
+        } else {
           const insertedLicenses = new Set<string>();
-          for (const lic of value) {
-            if (lic && lic.id && !insertedLicenses.has(lic.id)) {
-              insertedLicenses.add(lic.id);
-              await queryFn(
-                "INSERT INTO sia_licenses (id, name, limit_count) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-                [lic.id, lic.name || "", lic.limit || 0]
-              );
+          const filtered = value.filter(lic => lic && lic.id && !insertedLicenses.has(lic.id));
+          
+          if (filtered.length > 0) {
+            const ids = filtered.map(lic => lic.id);
+            const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_licenses WHERE id NOT IN (${placeholders})`, ids);
+            
+            // Chunk inserts
+            const chunkSize = 100;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const lic = chunk[i];
+                insertedLicenses.add(lic.id);
+                const offset = i * 3;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3})`);
+                flatValues.push(lic.id, lic.name || "", lic.limit || 0);
+              }
+              await queryFn(`
+                INSERT INTO sia_licenses (id, name, limit_count) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (id) DO UPDATE SET 
+                  name = EXCLUDED.name, 
+                  limit_count = EXCLUDED.limit_count
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_licenses");
           }
         }
       } else if (field === "componentTypes") {
-        await queryFn("DELETE FROM sia_component_types");
-        if (Array.isArray(value)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          await queryFn("DELETE FROM sia_component_types");
+        } else {
           const insertedComponents = new Set<string>();
-          for (const ct of value) {
-            if (ct && ct.id && !insertedComponents.has(ct.id)) {
-              insertedComponents.add(ct.id);
-              await queryFn(
-                "INSERT INTO sia_component_types (id, name, icon) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-                [ct.id, ct.name || "", ct.icon || ""]
-              );
+          const filtered = value.filter(ct => ct && ct.id && !insertedComponents.has(ct.id));
+          
+          if (filtered.length > 0) {
+            const ids = filtered.map(ct => ct.id);
+            const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_component_types WHERE id NOT IN (${placeholders})`, ids);
+            
+            // Chunk inserts
+            const chunkSize = 100;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const ct = chunk[i];
+                insertedComponents.add(ct.id);
+                const offset = i * 3;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3})`);
+                flatValues.push(ct.id, ct.name || "", ct.icon || "");
+              }
+              await queryFn(`
+                INSERT INTO sia_component_types (id, name, icon) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (id) DO UPDATE SET 
+                  name = EXCLUDED.name, 
+                  icon = EXCLUDED.icon
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_component_types");
           }
         }
       } else if (field === "inventoryItems") {
-        await queryFn("DELETE FROM sia_inventory_items");
-        if (Array.isArray(value)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          await queryFn("DELETE FROM sia_inventory_items");
+        } else {
           const insertedItems = new Set<string>();
-          for (const item of value) {
-            if (item && item.id && !insertedItems.has(item.id)) {
-              insertedItems.add(item.id);
-              await queryFn(
-                "INSERT INTO sia_inventory_items (id, name, type, quantity, serial, notes) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
-                [item.id, item.name || "", item.type || "", item.quantity || 0, item.serial || null, item.notes || null]
-              );
+          const filtered = value.filter(item => item && item.id && !insertedItems.has(item.id));
+          
+          if (filtered.length > 0) {
+            const ids = filtered.map(item => item.id);
+            const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_inventory_items WHERE id NOT IN (${placeholders})`, ids);
+            
+            // Chunk inserts
+            const chunkSize = 50;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const item = chunk[i];
+                insertedItems.add(item.id);
+                const offset = i * 6;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`);
+                flatValues.push(item.id, item.name || "", item.type || "", item.quantity || 0, item.serial || null, item.notes || null);
+              }
+              await queryFn(`
+                INSERT INTO sia_inventory_items (id, name, type, quantity, serial, notes) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (id) DO UPDATE SET 
+                  name = EXCLUDED.name, 
+                  type = EXCLUDED.type, 
+                  quantity = EXCLUDED.quantity, 
+                  serial = EXCLUDED.serial, 
+                  notes = EXCLUDED.notes
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_inventory_items");
           }
         }
       } else if (field === "decommissionedItems") {
-        await queryFn("DELETE FROM sia_decommissioned_items");
-        if (Array.isArray(value)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          await queryFn("DELETE FROM sia_decommissioned_items");
+        } else {
           const insertedDecoms = new Set<string>();
-          for (const dec of value) {
-            if (dec && dec.id && !insertedDecoms.has(dec.id)) {
-              insertedDecoms.add(dec.id);
-              await queryFn(
-                "INSERT INTO sia_decommissioned_items (id, name, type, serial, quantity, reason, timestamp, original_workstation) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING",
-                [
+          const filtered = value.filter(dec => dec && dec.id && !insertedDecoms.has(dec.id));
+          
+          if (filtered.length > 0) {
+            const ids = filtered.map(dec => dec.id);
+            const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_decommissioned_items WHERE id NOT IN (${placeholders})`, ids);
+            
+            // Chunk inserts
+            const chunkSize = 50;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const dec = chunk[i];
+                insertedDecoms.add(dec.id);
+                const offset = i * 8;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`);
+                flatValues.push(
                   dec.id,
                   dec.name || "",
                   dec.type || "",
@@ -229,44 +336,96 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
                   dec.quantity || 0,
                   dec.reason || "",
                   dec.timestamp || new Date().toISOString(),
-                  dec.originalWorkstation || null,
-                ]
-              );
+                  dec.originalWorkstation || null
+                );
+              }
+              await queryFn(`
+                INSERT INTO sia_decommissioned_items (id, name, type, serial, quantity, reason, timestamp, original_workstation) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (id) DO UPDATE SET 
+                  name = EXCLUDED.name, 
+                  type = EXCLUDED.type, 
+                  serial = EXCLUDED.serial, 
+                  quantity = EXCLUDED.quantity, 
+                  reason = EXCLUDED.reason, 
+                  timestamp = EXCLUDED.timestamp, 
+                  original_workstation = EXCLUDED.original_workstation
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_decommissioned_items");
           }
         }
       } else if (field === "auditLogs") {
-        await queryFn("DELETE FROM sia_audit_logs");
-        if (Array.isArray(value)) {
+        const logsSlice = Array.isArray(value) ? value.slice(0, 500) : [];
+        if (logsSlice.length === 0) {
+          await queryFn("DELETE FROM sia_audit_logs");
+        } else {
           const insertedLogs = new Set<string>();
-          for (const log of value.slice(0, 500)) {
-            if (log && log.id && !insertedLogs.has(log.id)) {
-              insertedLogs.add(log.id);
-              await queryFn(
-                "INSERT INTO sia_audit_logs (id, timestamp, action, description, log_user) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
-                [log.id, log.timestamp || "", log.action || "", log.description || "", log.user || ""]
-              );
+          const filtered = logsSlice.filter(log => log && log.id && !insertedLogs.has(log.id));
+          
+          if (filtered.length > 0) {
+            const ids = filtered.map(log => log.id);
+            const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_audit_logs WHERE id NOT IN (${placeholders})`, ids);
+            
+            // Chunk inserts
+            const chunkSize = 100;
+            for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+              const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              for (let i = 0; i < chunk.length; i++) {
+                const log = chunk[i];
+                insertedLogs.add(log.id);
+                const offset = i * 5;
+                valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
+                flatValues.push(log.id, log.timestamp || "", log.action || "", log.description || "", log.user || "");
+              }
+              await queryFn(`
+                INSERT INTO sia_audit_logs (id, timestamp, action, description, log_user) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (id) DO NOTHING
+              `, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_audit_logs");
           }
         }
       } else if (field === "database") {
-        await queryFn("DELETE FROM sia_assets");
-        if (value && typeof value === "object") {
+        if (!value || typeof value !== "object" || Object.keys(value).length === 0) {
+          await queryFn("DELETE FROM sia_assets");
+        } else {
           const insertedAssets = new Set<string>();
-          for (const [puestoId, asset] of Object.entries(value)) {
-            if (asset && typeof asset === "object" && !insertedAssets.has(puestoId)) {
-              insertedAssets.add(puestoId);
-              const castAsset = asset as any;
-              const licIds = Array.isArray(castAsset.licencia_ids)
-                ? castAsset.licencia_ids.join(",")
-                : castAsset.licencia_id || "";
-              await queryFn(
-                `INSERT INTO sia_assets (
-                  puesto_id, nombre_equipo, asignado_a, area_select, board, video, procesador,
-                  ram1, ram2, ram3, ram4, alm1, alm2, alm3, mon1, mon2, wifi, mouse, teclado,
-                  camara, auriculares, licencia_ids, comentarios
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) ON CONFLICT (puesto_id) DO NOTHING`,
-                [
+          const entries = Object.entries(value).filter(([puestoId, asset]) => asset && typeof asset === "object" && !insertedAssets.has(puestoId));
+          
+          if (entries.length > 0) {
+            const ids = entries.map(([puestoId]) => puestoId);
+            const deletePlaceholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+            await queryFn(`DELETE FROM sia_assets WHERE puesto_id NOT IN (${deletePlaceholders})`, ids);
+            
+            const columns = [
+              "puesto_id", "nombre_equipo", "asignado_a", "area_select", "board", "video", "procesador",
+              "ram1", "ram2", "ram3", "ram4", "alm1", "alm2", "alm3", "mon1", "mon2", "wifi", "mouse", "teclado",
+              "camara", "auriculares", "licencia_ids", "comentarios"
+            ];
+            
+            // Chunk inserts in batches of 50 to avoid parameter limits and speed up execution
+            const chunkSize = 50;
+            for (let chunkIdx = 0; chunkIdx < entries.length; chunkIdx += chunkSize) {
+              const chunk = entries.slice(chunkIdx, chunkIdx + chunkSize);
+              const valuePlaceholders: string[] = [];
+              const flatValues: any[] = [];
+              
+              for (let i = 0; i < chunk.length; i++) {
+                const [puestoId, asset] = chunk[i];
+                insertedAssets.add(puestoId);
+                const castAsset = asset as any;
+                const licIds = Array.isArray(castAsset.licencia_ids)
+                  ? castAsset.licencia_ids.join(",")
+                  : castAsset.licencia_id || "";
+                  
+                const rowValues = [
                   puestoId,
                   castAsset.nombre_equipo || null,
                   castAsset.asignado_a || null,
@@ -290,9 +449,45 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
                   castAsset.auriculares || null,
                   licIds || null,
                   castAsset.comentarios || null,
-                ]
-              );
+                ];
+                
+                const offset = i * columns.length;
+                const placeholders = rowValues.map((_, colIdx) => `$${offset + colIdx + 1}`).join(", ");
+                valuePlaceholders.push(`(${placeholders})`);
+                flatValues.push(...rowValues);
+              }
+              
+              const queryText = `
+                INSERT INTO sia_assets (${columns.join(", ")}) 
+                VALUES ${valuePlaceholders.join(", ")} 
+                ON CONFLICT (puesto_id) DO UPDATE SET
+                  nombre_equipo = EXCLUDED.nombre_equipo,
+                  asignado_a = EXCLUDED.asignado_a,
+                  area_select = EXCLUDED.area_select,
+                  board = EXCLUDED.board,
+                  video = EXCLUDED.video,
+                  procesador = EXCLUDED.procesador,
+                  ram1 = EXCLUDED.ram1,
+                  ram2 = EXCLUDED.ram2,
+                  ram3 = EXCLUDED.ram3,
+                  ram4 = EXCLUDED.ram4,
+                  alm1 = EXCLUDED.alm1,
+                  alm2 = EXCLUDED.alm2,
+                  alm3 = EXCLUDED.alm3,
+                  mon1 = EXCLUDED.mon1,
+                  mon2 = EXCLUDED.mon2,
+                  wifi = EXCLUDED.wifi,
+                  mouse = EXCLUDED.mouse,
+                  teclado = EXCLUDED.teclado,
+                  camara = EXCLUDED.camara,
+                  auriculares = EXCLUDED.auriculares,
+                  licencia_ids = EXCLUDED.licencia_ids,
+                  comentarios = EXCLUDED.comentarios
+              `;
+              await queryFn(queryText, flatValues);
             }
+          } else {
+            await queryFn("DELETE FROM sia_assets");
           }
         }
       }

@@ -76,6 +76,7 @@ function getApiUrl(path: string): string {
 export default function App() {
   const clientIdRef = React.useRef(Math.random().toString(36).substring(2, 11));
   const isIncomingUpdate = React.useRef(true);
+  const syncTimeoutRefs = React.useRef<{ [key: string]: any }>({});
 
   // Cloud Sync Configuration State
   const [cloudSyncId, setCloudSyncId] = useState<string>("danielsia");
@@ -671,53 +672,74 @@ export default function App() {
     };
   }, []);
 
-  // Save changes to LocalStorage and server safely
+  // Save changes to LocalStorage and server safely with DEBOUNCE to optimize Postgres connections
   useEffect(() => {
     localStorage.setItem("sia_master_v5", JSON.stringify(database));
     if (!isIncomingUpdate.current) {
-      sendUpdate("database", database);
+      if (syncTimeoutRefs.current["database"]) clearTimeout(syncTimeoutRefs.current["database"]);
+      syncTimeoutRefs.current["database"] = setTimeout(() => {
+        sendUpdate("database", database);
+      }, 1200);
     }
   }, [database]);
 
   useEffect(() => {
     localStorage.setItem("sia_areas_v5", JSON.stringify(areas));
     if (!isIncomingUpdate.current) {
-      sendUpdate("areas", areas);
+      if (syncTimeoutRefs.current["areas"]) clearTimeout(syncTimeoutRefs.current["areas"]);
+      syncTimeoutRefs.current["areas"] = setTimeout(() => {
+        sendUpdate("areas", areas);
+      }, 1200);
     }
   }, [areas]);
 
   useEffect(() => {
     localStorage.setItem("sia_licenses_v5", JSON.stringify(licenses));
     if (!isIncomingUpdate.current) {
-      sendUpdate("licenses", licenses);
+      if (syncTimeoutRefs.current["licenses"]) clearTimeout(syncTimeoutRefs.current["licenses"]);
+      syncTimeoutRefs.current["licenses"] = setTimeout(() => {
+        sendUpdate("licenses", licenses);
+      }, 1200);
     }
   }, [licenses]);
 
   useEffect(() => {
     localStorage.setItem("sia_inventory_v5", JSON.stringify(inventoryItems));
     if (!isIncomingUpdate.current) {
-      sendUpdate("inventoryItems", inventoryItems);
+      if (syncTimeoutRefs.current["inventoryItems"]) clearTimeout(syncTimeoutRefs.current["inventoryItems"]);
+      syncTimeoutRefs.current["inventoryItems"] = setTimeout(() => {
+        sendUpdate("inventoryItems", inventoryItems);
+      }, 1200);
     }
   }, [inventoryItems]);
 
   useEffect(() => {
     localStorage.setItem("sia_component_types_v5", JSON.stringify(componentTypes));
     if (!isIncomingUpdate.current) {
-      sendUpdate("componentTypes", componentTypes);
+      if (syncTimeoutRefs.current["componentTypes"]) clearTimeout(syncTimeoutRefs.current["componentTypes"]);
+      syncTimeoutRefs.current["componentTypes"] = setTimeout(() => {
+        sendUpdate("componentTypes", componentTypes);
+      }, 1200);
     }
   }, [componentTypes]);
 
   useEffect(() => {
     localStorage.setItem("sia_audit_logs_v5", JSON.stringify(auditLogs));
     if (!isIncomingUpdate.current) {
-      sendUpdate("auditLogs", auditLogs);
+      if (syncTimeoutRefs.current["auditLogs"]) clearTimeout(syncTimeoutRefs.current["auditLogs"]);
+      syncTimeoutRefs.current["auditLogs"] = setTimeout(() => {
+        sendUpdate("auditLogs", auditLogs);
+      }, 1200);
     }
   }, [auditLogs]);
 
   useEffect(() => {
     localStorage.setItem("sia_decommissioned_v5", JSON.stringify(decommissionedItems));
     if (!isIncomingUpdate.current) {
-      sendUpdate("decommissionedItems", decommissionedItems);
+      if (syncTimeoutRefs.current["decommissionedItems"]) clearTimeout(syncTimeoutRefs.current["decommissionedItems"]);
+      syncTimeoutRefs.current["decommissionedItems"] = setTimeout(() => {
+        sendUpdate("decommissionedItems", decommissionedItems);
+      }, 1200);
     }
   }, [decommissionedItems]);
 
