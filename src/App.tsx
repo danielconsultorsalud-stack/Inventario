@@ -250,61 +250,38 @@ export default function App() {
     }
   };
 
-  // Immediate pull and sync function
-  const handleSyncNow = async (targetId?: string) => {
-    const activeId = targetId || cloudSyncId;
-    if (!activeId) return;
+  // Immediate pull and sync function from the server (Postgres)
+  const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      const docRef = doc(db, "sia_databases", activeId);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists()) {
-        const cloudData = snapshot.data();
-        if (cloudData) {
-          isIncomingUpdate.current = true;
-          if (cloudData.database) setDatabase(cloudData.database);
-          if (cloudData.componentTypes) setComponentTypes(cloudData.componentTypes);
-          if (cloudData.areas) setAreas(cloudData.areas);
-          if (cloudData.licenses) setLicenses(cloudData.licenses);
-          if (cloudData.inventoryItems) setInventoryItems(cloudData.inventoryItems);
-          if (cloudData.auditLogs) setAuditLogs(cloudData.auditLogs);
-          if (cloudData.decommissionedItems) setDecommissionedItems(cloudData.decommissionedItems);
-          if (cloudData.googleSpreadsheetId) {
-            setGoogleSpreadsheetId(cloudData.googleSpreadsheetId);
-            localStorage.setItem("sia_google_sheet_id", cloudData.googleSpreadsheetId);
-          }
-          if (cloudData.googleSpreadsheetUrl) {
-            setGoogleSpreadsheetUrl(cloudData.googleSpreadsheetUrl);
-            localStorage.setItem("sia_google_sheet_url", cloudData.googleSpreadsheetUrl);
-          }
-          setTimeout(() => {
-            isIncomingUpdate.current = false;
-          }, 200);
-        }
-      } else {
-        // Not initialized yet in cloud, seed current browser state to the cloud
-        await syncStateToCloudAPI(
-          activeId,
-          database,
-          componentTypes,
-          areas,
-          licenses,
-          inventoryItems,
-          auditLogs,
-          decommissionedItems
-        );
-      }
-    } catch (err) {
-      console.error("Failed to fetch cloud sync on demand from Firestore:", err);
-      throw err;
+      const res = await fetch("/api/data");
+      if (!res.ok) throw new Error("El servidor no responde");
+      const serverData = await res.json();
+
+      isIncomingUpdate.current = true;
+      if (serverData.database) setDatabase(serverData.database);
+      if (serverData.componentTypes) setComponentTypes(serverData.componentTypes);
+      if (serverData.areas) setAreas(serverData.areas);
+      if (serverData.licenses) setLicenses(serverData.licenses);
+      if (serverData.inventoryItems) setInventoryItems(serverData.inventoryItems);
+      if (serverData.auditLogs) setAuditLogs(serverData.auditLogs);
+      if (serverData.decommissionedItems) setDecommissionedItems(serverData.decommissionedItems);
+      
+      setTimeout(() => {
+        isIncomingUpdate.current = false;
+      }, 200);
+
+      alert("¡Éxito! Se han descargado los últimos datos en tiempo real de la base de datos.");
+    } catch (err: any) {
+      console.error("Failed to fetch sync on demand from Server/Postgres:", err);
+      alert(`Hubo un error al intentar refrescar de la base de datos: ${err?.message || String(err)}`);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Explicit manual save to cloud function
+  // Explicit manual save to base de datos function via /api/seed
   const handleSaveToCloud = async () => {
-    if (!cloudSyncId) return;
     if (cloudPasswordInput !== "AdminCS") {
       setCloudPasswordError(true);
       return;
@@ -317,31 +294,40 @@ export default function App() {
         id: "save-log-" + Date.now(),
         timestamp: new Date().toISOString(),
         action: "SISTEMA",
-        description: `Se guardaron y reemplazaron los datos manualmente en la Nube SIA (ID: ${cloudSyncId}).`,
+        description: `Se guardaron y reemplazaron de forma manual todos los datos en la base de datos de inventarios.`,
         user: "danielconsultorsalud@gmail.com"
       };
       
       const updatedLogs = [newLog, ...currentLogs].slice(0, 500);
       setAuditLogs(updatedLogs);
 
-      await syncStateToCloudAPI(
-        cloudSyncId,
-        database,
-        componentTypes,
-        areas,
-        licenses,
-        inventoryItems,
-        updatedLogs,
-        decommissionedItems
-      );
+      const res = await fetch("/api/seed", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          database,
+          componentTypes,
+          areas,
+          licenses,
+          inventoryItems,
+          auditLogs: updatedLogs,
+          decommissionedItems
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error("El servidor devolvió un error al guardar: " + res.status);
+      }
       
       setIsSaveConfirmOpen(false);
       setCloudPasswordInput("");
-      alert("¡Éxito! La base de datos ha sido guardada y sincronizada correctamente en la Nube SIA.");
+      alert("¡Éxito! Todos los datos locales se han guardado y respaldado de forma segura en la base de datos.");
     } catch (err: any) {
-      console.error("Failed to save state to Cloud Firestore:", err);
+      console.error("Failed to save state to Server/Postgres:", err);
       const errMsg = err?.message || String(err);
-      alert(`Hubo un error al intentar guardar en la Nube SIA: ${errMsg}\nPor favor reintenta.`);
+      alert(`Hubo un error al intentar guardar en la base de datos: ${errMsg}\nPor favor reintenta.`);
     } finally {
       setIsSavingToCloud(false);
     }
@@ -1236,6 +1222,30 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => handleSyncNow()}
+                disabled={isSyncing}
+                className="flex-1 sm:flex-initial bg-white hover:bg-slate-100 border border-slate-200/80 text-slate-700 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
+                title="Obtener el último estado guardado en la base de datos"
+              >
+                <RefreshCw size={11} className={`${isSyncing ? "animate-spin text-red-650" : "text-slate-500"}`} />
+                Refrescar
+              </button>
+
+              <button
+                onClick={() => {
+                  setCloudPasswordInput("");
+                  setCloudPasswordError(false);
+                  setIsSaveConfirmOpen(true);
+                }}
+                disabled={isSavingToCloud}
+                className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10 disabled:opacity-60"
+                title="Reemplazar Base de Datos con tus datos locales"
+              >
+                <CloudUpload size={11} className={isSavingToCloud ? "animate-bounce" : ""} />
+                {isSavingToCloud ? "Guardando..." : "Guardar Base de Datos"}
+              </button>
+
+              <button
                 onClick={handleExportCSV}
                 className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
@@ -1550,7 +1560,7 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-sm font-black text-slate-950 font-sans tracking-tight">
-                  Confirmación de Reemplazo en la Nube
+                  Confirmación de Reemplazo en la Base de Datos
                 </h3>
                 <p className="text-[10px] uppercase tracking-wider font-mono text-slate-400 mt-1">
                   Acción irreversible de almacenamiento de datos
@@ -1561,16 +1571,12 @@ export default function App() {
             {/* Body content */}
             <div className="p-6 space-y-4 font-sans text-slate-600 text-xs leading-relaxed">
               <p>
-                Estás a punto de sincronizar tu base de datos local y guardar los cambios actuales en la Nube SIA bajo el identificador activo:
+                Estás a punto de sincronizar tu base de datos local y guardar los cambios actuales en la Base de Datos principal:
               </p>
-              <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl flex items-center justify-between font-mono">
-                <span className="text-slate-400 text-[10px] uppercase font-black">Código de Enlace:</span>
-                <span className="text-red-750 font-black text-sm tracking-wider">"{cloudSyncId}"</span>
-              </div>
               <p className="text-rose-750 font-semibold flex items-start gap-2 bg-rose-50 border border-rose-100 p-3 rounded-xl leading-relaxed">
                 <span className="text-base select-none mt-0.5">⚠️</span>
                 <span>
-                  <strong>¡ATENCIÓN!</strong> Al proceder, <strong>se reemplazará por completo</strong> toda la información que esté guardada en la nube con los datos que ves en tu pantalla actualmente. Ningún dato remoto anterior podrá recuperarse.
+                  <strong>¡ATENCIÓN!</strong> Al proceder, <strong>se reemplazará por completo</strong> toda la información que esté guardada en la base de datos con los datos que ves en tu pantalla actualmente. Ningún dato remoto anterior podrá recuperarse.
                 </span>
               </p>
 
@@ -1627,7 +1633,7 @@ export default function App() {
                 ) : (
                   <>
                     <CloudUpload size={12} />
-                    Sí, Reemplazar todo en la Nube
+                    Sí, Reemplazar todo en la Base de Datos
                   </>
                 )}
               </button>
