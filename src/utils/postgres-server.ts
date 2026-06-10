@@ -135,10 +135,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     if (field === "areas") {
       await client.query("DELETE FROM sia_areas");
       if (Array.isArray(value)) {
+        const insertedAreas = new Set<string>();
         for (const area of value) {
-          if (area && area.name) {
+          if (area && area.name && !insertedAreas.has(area.name)) {
+            insertedAreas.add(area.name);
             await client.query(
-              "INSERT INTO sia_areas (name, color) VALUES ($1, $2)",
+              "INSERT INTO sia_areas (name, color) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
               [area.name, area.color || "#cccccc"]
             );
           }
@@ -147,10 +149,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "licenses") {
       await client.query("DELETE FROM sia_licenses");
       if (Array.isArray(value)) {
+        const insertedLicenses = new Set<string>();
         for (const lic of value) {
-          if (lic && lic.id) {
+          if (lic && lic.id && !insertedLicenses.has(lic.id)) {
+            insertedLicenses.add(lic.id);
             await client.query(
-              "INSERT INTO sia_licenses (id, name, limit_count) VALUES ($1, $2, $3)",
+              "INSERT INTO sia_licenses (id, name, limit_count) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
               [lic.id, lic.name || "", lic.limit || 0]
             );
           }
@@ -159,10 +163,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "componentTypes") {
       await client.query("DELETE FROM sia_component_types");
       if (Array.isArray(value)) {
+        const insertedComponents = new Set<string>();
         for (const ct of value) {
-          if (ct && ct.id) {
+          if (ct && ct.id && !insertedComponents.has(ct.id)) {
+            insertedComponents.add(ct.id);
             await client.query(
-              "INSERT INTO sia_component_types (id, name, icon) VALUES ($1, $2, $3)",
+              "INSERT INTO sia_component_types (id, name, icon) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
               [ct.id, ct.name || "", ct.icon || ""]
             );
           }
@@ -171,10 +177,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "inventoryItems") {
       await client.query("DELETE FROM sia_inventory_items");
       if (Array.isArray(value)) {
+        const insertedItems = new Set<string>();
         for (const item of value) {
-          if (item && item.id) {
+          if (item && item.id && !insertedItems.has(item.id)) {
+            insertedItems.add(item.id);
             await client.query(
-              "INSERT INTO sia_inventory_items (id, name, type, quantity, serial, notes) VALUES ($1, $2, $3, $4, $5, $6)",
+              "INSERT INTO sia_inventory_items (id, name, type, quantity, serial, notes) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
               [item.id, item.name || "", item.type || "", item.quantity || 0, item.serial || null, item.notes || null]
             );
           }
@@ -183,10 +191,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "decommissionedItems") {
       await client.query("DELETE FROM sia_decommissioned_items");
       if (Array.isArray(value)) {
+        const insertedDecoms = new Set<string>();
         for (const dec of value) {
-          if (dec && dec.id) {
+          if (dec && dec.id && !insertedDecoms.has(dec.id)) {
+            insertedDecoms.add(dec.id);
             await client.query(
-              "INSERT INTO sia_decommissioned_items (id, name, type, serial, quantity, reason, timestamp, original_workstation) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+              "INSERT INTO sia_decommissioned_items (id, name, type, serial, quantity, reason, timestamp, original_workstation) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING",
               [
                 dec.id,
                 dec.name || "",
@@ -204,10 +214,12 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "auditLogs") {
       await client.query("DELETE FROM sia_audit_logs");
       if (Array.isArray(value)) {
+        const insertedLogs = new Set<string>();
         for (const log of value.slice(0, 500)) { // limit to 500 logs for safe performance
-          if (log && log.id) {
+          if (log && log.id && !insertedLogs.has(log.id)) {
+            insertedLogs.add(log.id);
             await client.query(
-              "INSERT INTO sia_audit_logs (id, timestamp, action, description, log_user) VALUES ($1, $2, $3, $4, $5)",
+              "INSERT INTO sia_audit_logs (id, timestamp, action, description, log_user) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
               [log.id, log.timestamp || "", log.action || "", log.description || "", log.user || ""]
             );
           }
@@ -216,8 +228,10 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
     } else if (field === "database") {
       await client.query("DELETE FROM sia_assets");
       if (value && typeof value === "object") {
+        const insertedAssets = new Set<string>();
         for (const [puestoId, asset] of Object.entries(value)) {
-          if (asset && typeof asset === "object") {
+          if (asset && typeof asset === "object" && !insertedAssets.has(puestoId)) {
+            insertedAssets.add(puestoId);
             const castAsset = asset as any;
             const licIds = Array.isArray(castAsset.licencia_ids)
               ? castAsset.licencia_ids.join(",")
@@ -227,7 +241,7 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
                 puesto_id, nombre_equipo, asignado_a, area_select, board, video, procesador,
                 ram1, ram2, ram3, ram4, alm1, alm2, alm3, mon1, mon2, wifi, mouse, teclado,
                 camara, auriculares, licencia_ids, comentarios
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) ON CONFLICT (puesto_id) DO NOTHING`,
               [
                 puestoId,
                 castAsset.nombre_equipo || null,
