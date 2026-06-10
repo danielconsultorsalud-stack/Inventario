@@ -274,7 +274,11 @@ export default function App() {
       alert("¡Éxito! Se han descargado los últimos datos en tiempo real de la base de datos.");
     } catch (err: any) {
       console.error("Failed to fetch sync on demand from Server/Postgres:", err);
-      alert(`Hubo un error al intentar refrescar de la base de datos: ${err?.message || String(err)}`);
+      let extension = "";
+      if (window.location.hostname.includes("vercel") || window.location.hostname.includes("netlify") || window.location.hostname.includes("github.io")) {
+        extension = "\n\n⚠️ NOTA: Estás visitando la aplicación desde un hosting estático (Vercel/Netlify). Estos servicios solo ejecutan el frontend estático y no ejecutan el servidor NodeJS personalizado que maneja las conexiones seguras de Neon Postgres. Para usar la base de datos activa, por favor abre la URL de vista previa de Google AI Studio o despliega el contenedor Express completo (en Cloud Run, Render, Railway, etc.).";
+      }
+      alert(`Hubo un error al intentar refrescar de la base de datos: ${err?.message || String(err)}${extension}`);
     } finally {
       setIsSyncing(false);
     }
@@ -327,7 +331,11 @@ export default function App() {
     } catch (err: any) {
       console.error("Failed to save state to Server/Postgres:", err);
       const errMsg = err?.message || String(err);
-      alert(`Hubo un error al intentar guardar en la base de datos: ${errMsg}\nPor favor reintenta.`);
+      let extension = "";
+      if (window.location.hostname.includes("vercel") || window.location.hostname.includes("netlify") || window.location.hostname.includes("github.io")) {
+        extension = "\n\n⚠️ NOTA: Estás visitando la aplicación desde un hosting estático (Vercel/Netlify). Estos servicios solo ejecutan el frontend estático y no ejecutan el servidor NodeJS personalizado que maneja las conexiones seguras de Neon Postgres. Para usar la base de datos activa, por favor abre la URL de vista previa de Google AI Studio o despliega el contenedor Express completo (en Cloud Run, Render, Railway, etc.).";
+      }
+      alert(`Hubo un error al intentar guardar en la base de datos: ${errMsg}${extension}\nPor favor reintenta.`);
     } finally {
       setIsSavingToCloud(false);
     }
