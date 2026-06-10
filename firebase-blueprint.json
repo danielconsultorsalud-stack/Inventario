@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "SiaDatabase": {
+      "title": "SIA Database State",
+      "description": "Entire unified database configuration and stock level state for a given workspace",
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "object",
+          "description": "Mapping from desk ID to equipment definition properties"
+        },
+        "componentTypes": {
+          "type": "array",
+          "description": "List of components registered"
+        },
+        "areas": {
+          "type": "array",
+          "description": "List of office/puesto areas and colors"
+        },
+        "licenses": {
+          "type": "array",
+          "description": "List of software packages and limit counters"
+        },
+        "inventoryItems": {
+          "type": "array",
+          "description": "List of active hardware inventory items, stock levels, and remarks"
+        },
+        "auditLogs": {
+          "type": "array",
+          "description": "Audit trails listing logged actions, timestamps, and usernames"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/sia_databases/{databaseId}": {
+      "schema": "SiaDatabase",
+      "description": "Active real-time synchronisation store for workspaces"
+    }
+  }
+}
