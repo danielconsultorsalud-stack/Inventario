@@ -14,6 +14,7 @@ import { DecommissionedModule } from "./components/DecommissionedModule";
 import { generatePDFReport } from "./utils/pdfGenerator";
 import { db, doc, getDoc, setDoc, onSnapshot } from "./utils/firebase";
 import { loginWithGoogleSheets, createInventorySpreadsheet, syncDatabaseToGoogleSheet } from "./utils/googleSheets";
+import { PostgresSetupModal } from "./components/PostgresSetupModal";
 
 const DEFAULT_AREAS: Area[] = [
   { name: "Administración", color: "#3b82f6" },
@@ -122,6 +123,9 @@ export default function App() {
   const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState<string>(() => {
     return localStorage.getItem("sia_google_sheet_url") || "";
   });
+
+  const [isPostgresModalOpen, setIsPostgresModalOpen] = useState(false);
+  const [isPgConnected, setIsPgConnected] = useState(false);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("sia_authenticated_v5") === "true";
@@ -425,6 +429,16 @@ export default function App() {
       setIsSyncingToSheets(false);
     }
   };
+
+  // Check Neon Postgres Connection Status
+  useEffect(() => {
+    fetch("/api/postgres/status")
+      .then((res) => res.json())
+      .then((data) => {
+        setIsPgConnected(data.connected);
+      })
+      .catch((err) => console.error("Error al cargar estado de Postgres:", err));
+  }, []);
 
   // Real-time Firestore synchronization and local event sourcing fallback
   useEffect(() => {
@@ -1305,6 +1319,8 @@ export default function App() {
                 </a>
               )}
 
+
+
               <button
                 onClick={() => generatePDFReport(database, componentTypes, licenses, inventoryItems)}
                 className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-600 text-white px-4.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10"
@@ -1579,6 +1595,8 @@ export default function App() {
         isSyncing={isSyncing}
         onSyncNow={handleSyncNow}
       />
+
+
 
       {/* CONFIRMACIÓN MANUAL GUARDAR EN LA NUBE MODAL */}
       {isSaveConfirmOpen && (
