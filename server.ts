@@ -61,6 +61,18 @@ function writeStore(data: any) {
 async function startServer() {
   const app = express();
 
+  // Custom CORS middleware to allow Vercel and Netlify frontends to interface with Cloud Run Express backend
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-client-id");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "15mb" }));
 
   // SSE client pool

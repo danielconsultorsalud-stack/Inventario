@@ -39,6 +39,23 @@ const DEFAULT_COMPONENT_TYPES: ComponentType[] = [
   { id: "otros", name: "Otros", icon: "📦" },
 ];
 
+const BACKEND_URL = "https://ais-pre-jfdo5yvr66rbu6sxeyrkhf-173441428768.us-west2.run.app";
+
+function getApiUrl(path: string): string {
+  if (
+    typeof window !== "undefined" &&
+    (window.location.hostname.includes("vercel") ||
+     window.location.hostname.includes("netlify") ||
+     window.location.hostname.includes("github.io") ||
+     (window.location.hostname.includes("localhost") === false &&
+      window.location.hostname.includes("127.0.0.1") === false &&
+      window.location.hostname.includes("run.app") === false))
+  ) {
+    return `${BACKEND_URL}${path}`;
+  }
+  return path;
+}
+
 export default function App() {
   const clientIdRef = React.useRef(Math.random().toString(36).substring(2, 11));
   const isIncomingUpdate = React.useRef(true);
@@ -172,7 +189,7 @@ export default function App() {
   // Real-time server sync function
   const sendUpdate = async (field: string, value: any) => {
     try {
-      await fetch("/api/update", {
+      await fetch(getApiUrl("/api/update"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -254,8 +271,8 @@ export default function App() {
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch("/api/data");
-      if (!res.ok) throw new Error("El servidor no responde");
+      const res = await fetch(getApiUrl("/api/data"));
+      if (!res.ok) throw new Error("El servidor no recibe la petición. Asegúrate de tener el servidor de vista previa activo.");
       const serverData = await res.json();
 
       isIncomingUpdate.current = true;
@@ -276,7 +293,7 @@ export default function App() {
       console.error("Failed to fetch sync on demand from Server/Postgres:", err);
       let extension = "";
       if (window.location.hostname.includes("vercel") || window.location.hostname.includes("netlify") || window.location.hostname.includes("github.io")) {
-        extension = "\n\n⚠️ NOTA: Estás visitando la aplicación desde un hosting estático (Vercel/Netlify). Estos servicios solo ejecutan el frontend estático y no ejecutan el servidor NodeJS personalizado que maneja las conexiones seguras de Neon Postgres. Para usar la base de datos activa, por favor abre la URL de vista previa de Google AI Studio o despliega el contenedor Express completo (en Cloud Run, Render, Railway, etc.).";
+        extension = "\n\n💡 Sugerencia: Asegúrate de que el servidor en Google AI Studio esté activo. Si se reactivó recientemente, reintenta en unos instantes.";
       }
       alert(`Hubo un error al intentar refrescar de la base de datos: ${err?.message || String(err)}${extension}`);
     } finally {
@@ -305,7 +322,7 @@ export default function App() {
       const updatedLogs = [newLog, ...currentLogs].slice(0, 500);
       setAuditLogs(updatedLogs);
 
-      const res = await fetch("/api/seed", {
+      const res = await fetch(getApiUrl("/api/seed"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -333,7 +350,7 @@ export default function App() {
       const errMsg = err?.message || String(err);
       let extension = "";
       if (window.location.hostname.includes("vercel") || window.location.hostname.includes("netlify") || window.location.hostname.includes("github.io")) {
-        extension = "\n\n⚠️ NOTA: Estás visitando la aplicación desde un hosting estático (Vercel/Netlify). Estos servicios solo ejecutan el frontend estático y no ejecutan el servidor NodeJS personalizado que maneja las conexiones seguras de Neon Postgres. Para usar la base de datos activa, por favor abre la URL de vista previa de Google AI Studio o despliega el contenedor Express completo (en Cloud Run, Render, Railway, etc.).";
+        extension = "\n\n💡 Sugerencia: Asegúrate de que el servidor en Google AI Studio esté activo. Si se reactivó recientemente, reintenta en unos instantes.";
       }
       alert(`Hubo un error al intentar guardar en la base de datos: ${errMsg}${extension}\nPor favor reintenta.`);
     } finally {
@@ -426,7 +443,7 @@ export default function App() {
 
   // Check Neon Postgres Connection Status
   useEffect(() => {
-    fetch("/api/postgres/status")
+    fetch(getApiUrl("/api/postgres/status"))
       .then((res) => res.json())
       .then((data) => {
         setIsPgConnected(data.connected);
@@ -442,7 +459,7 @@ export default function App() {
     // Pull from local node server and fallback to local SSE
     async function initLocalSync() {
       try {
-        const res = await fetch("/api/data");
+        const res = await fetch(getApiUrl("/api/data"));
         if (!res.ok) throw new Error("Server not responding");
         const serverData = await res.json();
 
@@ -487,7 +504,7 @@ export default function App() {
               decommissionedItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]") : []
             };
 
-            await fetch("/api/seed", {
+            await fetch(getApiUrl("/api/seed"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(seedPayload),
@@ -524,7 +541,7 @@ export default function App() {
     initLocalSync();
 
     try {
-      eventSource = new EventSource(`/api/events?clientId=${clientIdRef.current}`);
+      eventSource = new EventSource(getApiUrl(`/api/events?clientId=${clientIdRef.current}`));
       eventSource.onmessage = (event) => {
         try {
           const parsed = JSON.parse(event.data);
