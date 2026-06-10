@@ -13,6 +13,7 @@ import { InventoryModule } from "./components/InventoryModule";
 import { DecommissionedModule } from "./components/DecommissionedModule";
 import { generatePDFReport } from "./utils/pdfGenerator";
 import { db, doc, getDoc, setDoc, onSnapshot } from "./utils/firebase";
+import { loginWithGoogleSheets, createInventorySpreadsheet, syncDatabaseToGoogleSheet } from "./utils/googleSheets";
 
 const DEFAULT_AREAS: Area[] = [
   { name: "Administración", color: "#3b82f6" },
@@ -110,6 +111,17 @@ export default function App() {
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
   const [cloudPasswordInput, setCloudPasswordInput] = useState("");
   const [cloudPasswordError, setCloudPasswordError] = useState(false);
+
+  // States for Google Sheets connection
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [googleAuthToken, setGoogleAuthToken] = useState<string>("");
+  const [isSyncingToSheets, setIsSyncingToSheets] = useState(false);
+  const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState<string>(() => {
+    return localStorage.getItem("sia_google_sheet_id") || "";
+  });
+  const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState<string>(() => {
+    return localStorage.getItem("sia_google_sheet_url") || "";
+  });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("sia_authenticated_v5") === "true";
@@ -221,6 +233,8 @@ export default function App() {
         inventoryItems: invVal,
         auditLogs: logsVal,
         decommissionedItems: decVal || [],
+        googleSpreadsheetId,
+        googleSpreadsheetUrl,
         updatedAt: new Date().toISOString(),
       };
       
@@ -251,6 +265,14 @@ export default function App() {
           if (cloudData.inventoryItems) setInventoryItems(cloudData.inventoryItems);
           if (cloudData.auditLogs) setAuditLogs(cloudData.auditLogs);
           if (cloudData.decommissionedItems) setDecommissionedItems(cloudData.decommissionedItems);
+          if (cloudData.googleSpreadsheetId) {
+            setGoogleSpreadsheetId(cloudData.googleSpreadsheetId);
+            localStorage.setItem("sia_google_sheet_id", cloudData.googleSpreadsheetId);
+          }
+          if (cloudData.googleSpreadsheetUrl) {
+            setGoogleSpreadsheetUrl(cloudData.googleSpreadsheetUrl);
+            localStorage.setItem("sia_google_sheet_url", cloudData.googleSpreadsheetUrl);
+          }
           setTimeout(() => {
             isIncomingUpdate.current = false;
           }, 200);
@@ -318,6 +340,89 @@ export default function App() {
       alert(`Hubo un error al intentar guardar en la Nube SIA: ${errMsg}\nPor favor reintenta.`);
     } finally {
       setIsSavingToCloud(false);
+    }
+  };
+
+  const handleConnectAndSyncGoogleSheets = async () => {
+    setIsSyncingToSheets(true);
+    try {
+      let token = googleAuthToken;
+      let userObj = googleUser;
+      
+      // 1. If not authenticated, prompt login with popup
+      if (!token) {
+        const result = await loginWithGoogleSheets();
+        if (result) {
+          token = result.token;
+          userObj = result.user;
+          setGoogleAuthToken(token);
+          setGoogleUser(userObj);
+        } else {
+          throw new Error("No se pudo iniciar sesión con Google.");
+        }
+      }
+
+      // 2. Clear or create spreadsheet if not exists
+      let sheetId = googleSpreadsheetId;
+      let sheetUrl = googleSpreadsheetUrl;
+
+      if (!sheetId) {
+        const newSheet = await createInventorySpreadsheet(token, "SIA CLOUD - Inventario de Equipos y Licencias");
+        sheetId = newSheet.id;
+        sheetUrl = newSheet.url;
+        setGoogleSpreadsheetId(sheetId);
+        setGoogleSpreadsheetUrl(sheetUrl);
+        localStorage.setItem("sia_google_sheet_id", sheetId);
+        localStorage.setItem("sia_google_sheet_url", sheetUrl);
+        
+        // Push the update immediately to cloud so other users are linked
+        try {
+          await setDoc(doc(db, "sia_databases", cloudSyncId), removeUndefined({
+            database,
+            componentTypes,
+            areas,
+            licenses,
+            inventoryItems,
+            auditLogs,
+            decommissionedItems,
+            googleSpreadsheetId: sheetId,
+            googleSpreadsheetUrl: sheetUrl,
+            updatedAt: new Date().toISOString()
+          }));
+        } catch (dbErr) {
+          console.warn("No se pudo actualizar el ID de Google Sheet en Firestore, pero se guardó de forma local:", dbErr);
+        }
+      }
+
+      // 3. Write/Sync database to sheet organized by columns
+      await syncDatabaseToGoogleSheet(token, sheetId, database, licenses);
+      
+      // Update audit log
+      const currentLogs = [...auditLogs];
+      const newLog = {
+        id: "sheet-sync-log-" + Date.now(),
+        timestamp: new Date().toISOString(),
+        action: "GOOGLE_SHEETS",
+        description: `Se exportó y sincronizó correctamente el inventario con Google Sheets (organizado en columnas).`,
+        user: userObj?.email || "danielconsultorsalud@gmail.com"
+      };
+      setAuditLogs([newLog, ...currentLogs].slice(0, 500));
+      
+      alert("¡Éxito! Todo el inventario se ha sincronizado correctamente con Google Sheets (organizado en columnas).");
+    } catch (err: any) {
+      console.error("Google Sheets sync failed:", err);
+      const errMsg = err?.message || String(err);
+      
+      // If unauthorized/expired token, reset auth token so they can re-login next click
+      if (errMsg.includes("401") || errMsg.includes("unauthorized") || errMsg.includes("token")) {
+        setGoogleAuthToken("");
+        setGoogleUser(null);
+        alert("Tu sesión de Google Sheets ha expirado. Por favor, haz clic nuevamente para volver a conectar.");
+      } else {
+        alert(`Hubo un problema al sincronizar con Google Sheets:\n${errMsg}\nPor favor intenta nuevamente.`);
+      }
+    } finally {
+      setIsSyncingToSheets(false);
     }
   };
 
@@ -1177,6 +1282,28 @@ export default function App() {
               >
                 <FileSpreadsheet size={12} className="text-emerald-700" /> CSV
               </button>
+
+              <button
+                onClick={handleConnectAndSyncGoogleSheets}
+                disabled={isSyncingToSheets}
+                className="flex-1 sm:flex-initial bg-emerald-50 hover:bg-emerald-100/90 border border-emerald-200/80 text-emerald-850 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
+                title={googleSpreadsheetUrl ? "Sincronizar datos con tu hoja de cálculo Google Sheets" : "Conectar con Google Sheets y crear hoja de cálculo"}
+              >
+                <FileSpreadsheet size={12} className={isSyncingToSheets ? "animate-spin text-emerald-600" : "text-emerald-700"} />
+                {isSyncingToSheets ? "Sincronizando..." : googleSpreadsheetId ? "Sincronizar Sheets" : "Conectar Sheets"}
+              </button>
+
+              {googleSpreadsheetUrl && (
+                <a
+                  href={googleSpreadsheetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 sm:flex-initial bg-white hover:bg-slate-50 border border-emerald-200 text-emerald-850 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                  title="Abrir hoja de cálculo vinculada en una nueva pestaña"
+                >
+                  🟢 Abrir Excel/Sheet
+                </a>
+              )}
 
               <button
                 onClick={() => generatePDFReport(database, componentTypes, licenses, inventoryItems)}
