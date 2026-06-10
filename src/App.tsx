@@ -41,7 +41,7 @@ const DEFAULT_COMPONENT_TYPES: ComponentType[] = [
 
 export default function App() {
   const clientIdRef = React.useRef(Math.random().toString(36).substring(2, 11));
-  const isIncomingUpdate = React.useRef(false);
+  const isIncomingUpdate = React.useRef(true);
 
   // Cloud Sync Configuration State
   const [cloudSyncId, setCloudSyncId] = useState<string>("danielsia");
@@ -440,126 +440,121 @@ export default function App() {
       .catch((err) => console.error("Error al cargar estado de Postgres:", err));
   }, []);
 
-  // Real-time Firestore synchronization and local event sourcing fallback
+  // Real-time server synchronization and local event sourcing fallback
   useEffect(() => {
     let isMounted = true;
     let eventSource: EventSource | null = null;
 
-    if (cloudSyncId) {
-      // 1. Fetch once on mount or when cloudSyncId changes. The user requested manual pull/push.
-      handleSyncNow(cloudSyncId);
-    } else {
-      // 2. Otherwise pull from local node server and fallback to local SSE
-      async function initLocalSync() {
-        try {
-          const res = await fetch("/api/data");
-          if (!res.ok) throw new Error("Server not responding");
-          const serverData = await res.json();
+    // Pull from local node server and fallback to local SSE
+    async function initLocalSync() {
+      try {
+        const res = await fetch("/api/data");
+        if (!res.ok) throw new Error("Server not responding");
+        const serverData = await res.json();
 
-          if (isMounted) {
-            isIncomingUpdate.current = true;
+        if (isMounted) {
+          isIncomingUpdate.current = true;
 
-            // If the server was never seeded/initialized, push the local localStorage template data
-            if (!serverData.initialized) {
-              const hasLocalData = localStorage.getItem("sia_master_v5") || localStorage.getItem("sia_licenses_v5");
-              const seedPayload = {
-                database: hasLocalData ? JSON.parse(localStorage.getItem("sia_master_v5") || "{}") : {},
-                componentTypes: hasLocalData ? JSON.parse(localStorage.getItem("sia_component_types_v5") || "[]") : DEFAULT_COMPONENT_TYPES,
-                areas: hasLocalData ? JSON.parse(localStorage.getItem("sia_areas_v5") || "[]") : DEFAULT_AREAS,
-                licenses: hasLocalData ? JSON.parse(localStorage.getItem("sia_licenses_v5") || "[]") : [
-                  { id: "lic-windows11", name: "Windows 11 Pro Enterprise", limit: 10 },
-                  { id: "lic-office365", name: "Office 365 Business Premium", limit: 5 },
-                ],
-                inventoryItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_inventory_v5") || "[]") : [
-                  { id: "inv-board-1", name: "ASUS Prime H510M-E LGA1200", type: "board", quantity: 4, notes: "Cajas selladas - Estante A" },
-                  { id: "inv-board-2", name: "Gigabyte B560M H Ultra", type: "board", quantity: 2, notes: "Caja principal estante A" },
-                  { id: "inv-cpu-1", name: "Intel Core i5-11400 2.6GHz", type: "procesador", quantity: 6, notes: "Caja de procesadores" },
-                  { id: "inv-cpu-2", name: "Intel Core i7-11700 3.6GHz", type: "procesador", quantity: 2, notes: "Gabinete de seguridad TI" },
-                  { id: "inv-ram-1", name: "Kingston Fury Beast DDR4 8GB 3200MHz", type: "ram", quantity: 12, notes: "Cajón de repuestos RAM" },
-                  { id: "inv-ram-2", name: "Corsair Vengeance LPX DDR4 16GB 3200Mhz", type: "ram", quantity: 8, notes: "Cajón de repuestos RAM" },
-                  { id: "inv-ssd-1", name: "Crucial P3 NVMe M.2 SSD 500GB", type: "almacenamiento", quantity: 10, notes: "Estante seguro TI" },
-                  { id: "inv-ssd-2", name: "Kingston A400 SATA SSD 480GB", type: "almacenamiento", quantity: 6, notes: "Cajón de repuestos SSD" },
-                  { id: "inv-gpu-1", name: "NVIDIA GeForce GTX 1650 4GB", type: "video", quantity: 3, notes: "Rack de tarjetas gráficas" },
-                  { id: "inv-3", name: "Monitor HP v22v FHD 21.5''", type: "monitor", quantity: 5, notes: "Rack de monitores" },
-                  { id: "inv-1", name: "Mouse Logitech M170 Inalámbrico", type: "mouse", quantity: 5, notes: "Armario TI - Caja Principal" },
-                  { id: "inv-2", name: "Teclado Redragon Dragonborn K630", type: "teclado", quantity: 3, notes: "Estante Auxiliar 2" },
-                  { id: "inv-4", name: "Cámara Web Full HD Genius 1080p", type: "camara", quantity: 3, notes: "Soporte Técnico" },
-                ],
-                auditLogs: hasLocalData ? JSON.parse(localStorage.getItem("sia_audit_logs_v5") || "[]") : [
-                  {
-                    id: "initial-log",
-                    timestamp: new Date().toISOString(),
-                    action: "SISTEMA",
-                    description: "Se inicializó la Bitácora de Registro de Cambios de SIA CLOUD.",
-                    user: "danielconsultorsalud@gmail.com"
-                  }
-                ],
-                decommissionedItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]") : []
-              };
+          // If the server was never seeded/initialized, push the local localStorage template data
+          if (!serverData.initialized) {
+            const hasLocalData = localStorage.getItem("sia_master_v5") || localStorage.getItem("sia_licenses_v5");
+            const seedPayload = {
+              database: hasLocalData ? JSON.parse(localStorage.getItem("sia_master_v5") || "{}") : {},
+              componentTypes: hasLocalData ? JSON.parse(localStorage.getItem("sia_component_types_v5") || "[]") : DEFAULT_COMPONENT_TYPES,
+              areas: hasLocalData ? JSON.parse(localStorage.getItem("sia_areas_v5") || "[]") : DEFAULT_AREAS,
+              licenses: hasLocalData ? JSON.parse(localStorage.getItem("sia_licenses_v5") || "[]") : [
+                { id: "lic-windows11", name: "Windows 11 Pro Enterprise", limit: 10 },
+                { id: "lic-office365", name: "Office 365 Business Premium", limit: 5 },
+              ],
+              inventoryItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_inventory_v5") || "[]") : [
+                { id: "inv-board-1", name: "ASUS Prime H510M-E LGA1200", type: "board", quantity: 4, notes: "Cajas selladas - Estante A" },
+                { id: "inv-board-2", name: "Gigabyte B560M H Ultra", type: "board", quantity: 2, notes: "Caja principal estante A" },
+                { id: "inv-cpu-1", name: "Intel Core i5-11400 2.6GHz", type: "procesador", quantity: 6, notes: "Caja de procesadores" },
+                { id: "inv-cpu-2", name: "Intel Core i7-11700 3.6GHz", type: "procesador", quantity: 2, notes: "Gabinete de seguridad TI" },
+                { id: "inv-ram-1", name: "Kingston Fury Beast DDR4 8GB 3200MHz", type: "ram", quantity: 12, notes: "Cajón de repuestos RAM" },
+                { id: "inv-ram-2", name: "Corsair Vengeance LPX DDR4 16GB 3200Mhz", type: "ram", quantity: 8, notes: "Cajón de repuestos RAM" },
+                { id: "inv-ssd-1", name: "Crucial P3 NVMe M.2 SSD 500GB", type: "almacenamiento", quantity: 10, notes: "Estante seguro TI" },
+                { id: "inv-ssd-2", name: "Kingston A400 SATA SSD 480GB", type: "almacenamiento", quantity: 6, notes: "Cajón de repuestos SSD" },
+                { id: "inv-gpu-1", name: "NVIDIA GeForce GTX 1650 4GB", type: "video", quantity: 3, notes: "Rack de tarjetas gráficas" },
+                { id: "inv-3", name: "Monitor HP v22v FHD 21.5''", type: "monitor", quantity: 5, notes: "Rack de monitores" },
+                { id: "inv-1", name: "Mouse Logitech M170 Inalámbrico", type: "mouse", quantity: 5, notes: "Armario TI - Caja Principal" },
+                { id: "inv-2", name: "Teclado Redragon Dragonborn K630", type: "teclado", quantity: 3, notes: "Estante Auxiliar 2" },
+                { id: "inv-4", name: "Cámara Web Full HD Genius 1080p", type: "camara", quantity: 3, notes: "Soporte Técnico" },
+              ],
+              auditLogs: hasLocalData ? JSON.parse(localStorage.getItem("sia_audit_logs_v5") || "[]") : [
+                {
+                  id: "initial-log",
+                  timestamp: new Date().toISOString(),
+                  action: "SISTEMA",
+                  description: "Se inicializó la Bitácora de Registro de Cambios de SIA.",
+                  user: "danielconsultorsalud@gmail.com"
+                }
+              ],
+              decommissionedItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]") : []
+            };
 
-              await fetch("/api/seed", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(seedPayload),
-              });
+            await fetch("/api/seed", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(seedPayload),
+            });
 
-              setDatabase(seedPayload.database);
-              setComponentTypes(seedPayload.componentTypes);
-              setAreas(seedPayload.areas);
-              setLicenses(seedPayload.licenses);
-              setInventoryItems(seedPayload.inventoryItems);
-              setAuditLogs(seedPayload.auditLogs);
-              setDecommissionedItems(seedPayload.decommissionedItems || []);
-            } else {
-              setDatabase(serverData.database || {});
-              setComponentTypes(serverData.componentTypes || DEFAULT_COMPONENT_TYPES);
-              setAreas(serverData.areas || DEFAULT_AREAS);
-              setLicenses(serverData.licenses || []);
-              setInventoryItems(serverData.inventoryItems || []);
-              setAuditLogs(serverData.auditLogs || []);
-              setDecommissionedItems(serverData.decommissionedItems || []);
-            }
+            setDatabase(seedPayload.database);
+            setComponentTypes(seedPayload.componentTypes);
+            setAreas(seedPayload.areas);
+            setLicenses(seedPayload.licenses);
+            setInventoryItems(seedPayload.inventoryItems);
+            setAuditLogs(seedPayload.auditLogs);
+            setDecommissionedItems(seedPayload.decommissionedItems || []);
+          } else {
+            setDatabase(serverData.database || {});
+            setComponentTypes(serverData.componentTypes || DEFAULT_COMPONENT_TYPES);
+            setAreas(serverData.areas || DEFAULT_AREAS);
+            setLicenses(serverData.licenses || []);
+            setInventoryItems(serverData.inventoryItems || []);
+            setAuditLogs(serverData.auditLogs || []);
+            setDecommissionedItems(serverData.decommissionedItems || []);
           }
-        } catch (err) {
-          console.error("Failed initial storage fetch from server:", err);
-        } finally {
-          if (isMounted) {
+        }
+      } catch (err) {
+        console.error("Failed initial storage fetch from server:", err);
+      } finally {
+        if (isMounted) {
+          setTimeout(() => {
+            isIncomingUpdate.current = false;
+          }, 150);
+        }
+      }
+    }
+
+    initLocalSync();
+
+    try {
+      eventSource = new EventSource(`/api/events?clientId=${clientIdRef.current}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.senderId !== clientIdRef.current) {
+            isIncomingUpdate.current = true;
+            
+            if (parsed.field === "database") setDatabase(parsed.value);
+            if (parsed.field === "componentTypes") setComponentTypes(parsed.value);
+            if (parsed.field === "areas") setAreas(parsed.value);
+            if (parsed.field === "licenses") setLicenses(parsed.value);
+            if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
+            if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
+            if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
+
             setTimeout(() => {
               isIncomingUpdate.current = false;
             }, 150);
           }
+        } catch (err) {
+          console.error("SSE parsing error:", err);
         }
-      }
-
-      initLocalSync();
-
-      try {
-        eventSource = new EventSource(`/api/events?clientId=${clientIdRef.current}`);
-        eventSource.onmessage = (event) => {
-          try {
-            const parsed = JSON.parse(event.data);
-            if (parsed.senderId !== clientIdRef.current) {
-              isIncomingUpdate.current = true;
-              
-              if (parsed.field === "database") setDatabase(parsed.value);
-              if (parsed.field === "componentTypes") setComponentTypes(parsed.value);
-              if (parsed.field === "areas") setAreas(parsed.value);
-              if (parsed.field === "licenses") setLicenses(parsed.value);
-              if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
-              if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
-              if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
-
-              setTimeout(() => {
-                isIncomingUpdate.current = false;
-              }, 150);
-            }
-          } catch (err) {
-            console.error("SSE parsing error:", err);
-          }
-        };
-      } catch (err) {
-        console.error("Could not register SSE client:", err);
-      }
+      };
+    } catch (err) {
+      console.error("Could not register SSE client:", err);
     }
 
     return () => {
@@ -568,7 +563,7 @@ export default function App() {
         eventSource.close();
       }
     };
-  }, [cloudSyncId]);
+  }, []);
 
   // Save changes to LocalStorage and server safely
   useEffect(() => {
@@ -1179,28 +1174,6 @@ export default function App() {
                   <span>Inventario</span>
                   <span className="text-red-700 font-normal">Equipos y Licencias</span>
                 </h1>
-                
-                {cloudSyncId ? (
-                  <div className="flex flex-wrap items-center gap-2 select-none shrink-0">
-                    <button
-                      onClick={() => setIsBackupModalOpen(true)}
-                      className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider flex items-center gap-1.5 hover:bg-emerald-100 transition-all cursor-pointer shadow-xs"
-                      title={`Sincronización en la Nube SIA activa (${cloudSyncId}). Clic para configurar.`}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Nube: {cloudSyncId}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setIsBackupModalOpen(true)}
-                    className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-750 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider flex items-center gap-1.5 hover:bg-amber-100 transition-all cursor-pointer shadow-xs select-none shrink-0"
-                    title="Almacenamiento Local temporal. Para sincronizar tus dispositivos en Netlify, haz clic aquí para activar la Nube SIA."
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    Sin Nube
-                  </button>
-                )}
               </div>
               <p className="text-[9px] font-black text-slate-400 tracking-[0.2em] uppercase mt-1.5 font-mono leading-none">
                 Gestión de Activos TI
@@ -1254,40 +1227,12 @@ export default function App() {
 
             {/* Grupo 2: Herramientas de Datos */}
             <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-100 p-1.5 rounded-2xl w-full sm:w-auto">
-              {cloudSyncId && (
-                <>
-                  <button
-                    onClick={() => handleSyncNow()}
-                    disabled={isSyncing}
-                    className="flex-1 sm:flex-initial bg-white hover:bg-slate-100 border border-slate-200/80 text-slate-700 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
-                    title="Obtener el último estado guardado en la Nube SIA"
-                  >
-                    <RefreshCw size={11} className={`${isSyncing ? "animate-spin text-red-650" : "text-slate-500"}`} />
-                    Refrescar
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setCloudPasswordInput("");
-                      setCloudPasswordError(false);
-                      setIsSaveConfirmOpen(true);
-                    }}
-                    disabled={isSavingToCloud}
-                    className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10 disabled:opacity-60"
-                    title="Reemplazar Master de la Nube con tus datos locales"
-                  >
-                    <CloudUpload size={11} className={isSavingToCloud ? "animate-bounce" : ""} />
-                    {isSavingToCloud ? "Guardando..." : "Guardar en Nube"}
-                  </button>
-                </>
-              )}
-
               <button
                 onClick={() => setIsBackupModalOpen(true)}
                 className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                title="Sincronización en la Nube y Copias"
+                title="Copias de Seguridad"
               >
-                <Database size={11} className="text-red-700" /> Nube
+                <Database size={11} className="text-red-700" /> Respaldos
               </button>
 
               <button
@@ -1590,10 +1535,6 @@ export default function App() {
         inventoryItems={inventoryItems}
         auditLogs={auditLogs}
         onRestoreBackup={handleRestoreBackup}
-        cloudSyncId={cloudSyncId}
-        onSetCloudSyncId={setCloudSyncId}
-        isSyncing={isSyncing}
-        onSyncNow={handleSyncNow}
       />
 
 

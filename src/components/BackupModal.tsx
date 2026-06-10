@@ -19,10 +19,6 @@ interface BackupModalProps {
     inventoryItems: InventoryItem[];
     auditLogs: AuditLogEntry[];
   }) => void;
-  cloudSyncId: string;
-  onSetCloudSyncId: (id: string) => void;
-  isSyncing: boolean;
-  onSyncNow: (targetId?: string) => Promise<void>;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
@@ -35,10 +31,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   inventoryItems,
   auditLogs,
   onRestoreBackup,
-  cloudSyncId,
-  onSetCloudSyncId,
-  isSyncing,
-  onSyncNow,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [parsedData, setParsedData] = useState<{
@@ -51,8 +43,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [localSyncId, setLocalSyncId] = useState(cloudSyncId);
-  const [isCloudLoading, setIsCloudLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -208,49 +198,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     }
   };
 
-  const handleConnectCloud = async () => {
-    if (!localSyncId.trim()) {
-      setErrorMsg("Por favor, ingresa un código de sincronización válido.");
-      return;
-    }
-    const targetId = localSyncId.trim();
-    setIsCloudLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    try {
-      onSetCloudSyncId(targetId);
-      setSuccessMsg("¡Conectando exitosamente a la Nube SIA! Iniciando descarga de datos...");
-      setTimeout(async () => {
-        try {
-          await onSyncNow(targetId);
-          setSuccessMsg("¡Nube conectada y datos sincronizados en tiempo real!");
-        } catch (err: any) {
-          console.error("Firestore sync error:", err);
-          setErrorMsg(err?.message || "No hay datos guardados aún con este código. Tu navegador actual cargará su base de datos local actual en la nube.");
-        } finally {
-          setIsCloudLoading(false);
-          // Set timeout to close modal or reset success message
-          setTimeout(() => setSuccessMsg(null), 3000);
-        }
-      }, 1000);
-    } catch (err) {
-      setErrorMsg("Error de conexión al servidor de sincronización.");
-      setIsCloudLoading(false);
-    }
-  };
-
-  const handleDisconnectCloud = () => {
-    onSetCloudSyncId("");
-    setLocalSyncId("");
-    setSuccessMsg("Se desactivó la Sincronización en la Nube. Volviendo al estado de almacenamiento local.");
-    setTimeout(() => setSuccessMsg(null), 3500);
-  };
-
-  const handleGenerateCode = () => {
-    const randomCode = "SIA-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-    setLocalSyncId(randomCode);
-  };
-
   return (
     <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md flex items-center justify-center z-[90] p-4 font-sans text-slate-950">
       <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-[2.5rem] p-8 shadow-2xl animate-fade-in animate-duration-200 flex flex-col max-h-[90vh]">
@@ -302,58 +249,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             </div>
           )}
 
-          {/* SECCIÓN CLOUD SYNC */}
-          <div className="bg-gradient-to-br from-slate-50 to-red-50/20 border border-slate-200/80 rounded-[2rem] p-6 space-y-4">
-            <div className="flex items-center gap-2.5">
-              <Cloud size={20} className="text-red-700" />
-              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
-                Sincronización en la Nube SIA (Para Netlify e Incógnito)
-              </h4>
-            </div>
-
-            <div className="text-[11px] text-slate-500 space-y-2 leading-relaxed">
-              <p>
-                <span className="font-bold text-slate-800">¿Por qué tus datos cambian de forma independiente en Netlify o Modo Incógnito?</span>
-              </p>
-              <p>
-                Netlify es una red de distribución estática (no puede ejecutar tu servidor de base de datos integrado de forma persistente). Por ello, por defecto SIA guarda el diseño de tus puestos de oficina y stock de forma aislada en la memoria (<code className="bg-slate-100 px-1 py-0.5 rounded text-red-700 font-mono">localStorage</code>) de tu navegador local.
-              </p>
-              <p>
-                Al habilitar la <span className="font-bold text-slate-800">Nube SIA</span>, todas tus pestañas de incógnito, Netlify y dispositivos móviles compartirán <span className="font-bold text-red-700">exactamente la misma información</span> en tiempo real sin importar dónde se abra el sitio web.
-              </p>
-            </div>
-
-            {/* Cloud Status */}
-            <div className="p-4 bg-white border border-slate-150 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <div className="text-xs">
-                  <span className="font-semibold text-slate-500">Estado de Red: </span>
-                  <span className="font-black text-emerald-700 uppercase font-mono">Nube Conectada Automáticamente</span>
-                </div>
-              </div>
-              
-              <div className="text-xs flex items-center gap-2">
-                <span className="bg-emerald-50 border border-emerald-100/80 text-emerald-800 px-3 py-1 rounded-xl font-mono font-bold text-[10px] shadow-2xs">
-                  Código Enlace: {cloudSyncId}
-                </span>
-              </div>
-            </div>
-
-            {/* Locked connection message */}
-            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-xs text-emerald-950 flex items-center gap-2.5 font-medium leading-relaxed">
-              <span className="text-emerald-700 font-extrabold font-mono text-xs bg-emerald-100 px-2 py-0.5 rounded-lg">SIA CLOUD</span>
-              <span>
-                Conexión automática y segura activa. Todas tus modificaciones se guardan y sincronizan en la Nube SIA en tiempo real.
-              </span>
-            </div>
-          </div>
-
           {/* EXPORT PANEL */}
           <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl flex flex-col [@media(min-width:540px)]:flex-row [@media(min-width:540px)]:items-center justify-between gap-4">
             <div className="space-y-1 max-w-sm">
               <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
-                1. Descargar Respaldo Total
+                Descargar Respaldo Total
               </h4>
               <p className="text-xs text-slate-500 font-medium leading-relaxed">
                 Empaqueta y descarga todo el estado actual sistema: computadores, componentes, stock de almacén, áreas corporativas y bitácoras de cambios en un único archivo serializado.
@@ -371,7 +271,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           {/* IMPORT PANEL */}
           <div className="space-y-3">
             <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
-              2. Cargar Repositorio o Copia de Respaldo
+              Cargar Repositorio o Copia de Respaldo
             </h4>
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
               Sube un archivo de respaldo previamente descargado para sobrescribir y restablecer la base de datos de SIA en este navegador. 
