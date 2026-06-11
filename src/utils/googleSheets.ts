@@ -3,8 +3,24 @@ import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, User } from "fir
 import firebaseConfig from "../../firebase-applet-config.json";
 import { AssetData, License, DecommissionedItem } from "../types";
 
-// Re-use the Firebase app configuration
-const app = initializeApp(firebaseConfig);
+// Re-use the Firebase app configuration with dynamic local storage override
+let activeFirebaseConfig: any = firebaseConfig;
+if (typeof window !== "undefined") {
+  try {
+    const custom = localStorage.getItem("sia_custom_firebase_config");
+    if (custom) {
+      const parsed = JSON.parse(custom);
+      if (parsed && parsed.apiKey && parsed.authDomain) {
+        activeFirebaseConfig = parsed;
+        console.log("Using custom Firebase configuration for Google Sheets auth: " + parsed.projectId);
+      }
+    }
+  } catch (err) {
+    console.error("Error loading custom firebase config:", err);
+  }
+}
+
+const app = initializeApp(activeFirebaseConfig);
 export const auth = getAuth(app);
 
 // Keep token in memory

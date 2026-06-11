@@ -1,9 +1,9 @@
 {
-  "projectId": "gen-lang-client-0128583657",
-  "appId": "1:603614068838:web:3d917f6ca363f325432da7",
-  "apiKey": "AIzaSyCBlLVraARBTd7mXAynuRt-gYW75K5C-dM",
-  "authDomain": "gen-lang-client-0128583657.firebaseapp.com",
-  "storageBucket": "gen-lang-client-0128583657.firebasestorage.app",
-  "messagingSenderId": "603614068838",
+  "projectId": "sia-inventario",
+  "appId": "1:194809480395:web:fb4d7f6467d1fff050874e",
+  "apiKey": "AIzaSyCeKo8mHqu5p8VG8aV2b9Uxe5voOTyk_8k",
+  "authDomain": "sia-inventario.firebaseapp.com",
+  "storageBucket": "sia-inventario.firebasestorage.app",
+  "messagingSenderId": "194809480395",
   "measurementId": ""
 }

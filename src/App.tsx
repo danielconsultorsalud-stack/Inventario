@@ -164,6 +164,11 @@ export default function App() {
     return "https://docs.google.com/spreadsheets/d/13mt9-b_FJGWOqBqAYns6beFCMPRNlUwPBd-0zv-MfUA/edit?gid=0#gid=0";
   });
 
+  const [showFirebaseConfigPanel, setShowFirebaseConfigPanel] = useState(false);
+  const [customFirebaseConfigJson, setCustomFirebaseConfigJson] = useState<string>(() => {
+    return localStorage.getItem("sia_custom_firebase_config") || "";
+  });
+
   const [isPostgresModalOpen, setIsPostgresModalOpen] = useState(false);
   const [isPgConnected, setIsPgConnected] = useState(false);
 
@@ -1801,16 +1806,16 @@ export default function App() {
               </p>
 
               {/* Google Sheets Integration Status with direct button inside modal */}
-              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 space-y-2">
+              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full ${googleAuthToken ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
-                    <span className="font-extrabold text-[8px] uppercase tracking-wider text-slate-800">
+                    <span className="font-extrabold text-[8px] uppercase tracking-wider text-slate-800 font-sans">
                       Google Sheets / Excel en línea
                     </span>
                   </div>
                   {googleAuthToken ? (
-                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-sans">
                       Sesión Activa ({googleUser?.email || "Google"})
                     </span>
                   ) : (
@@ -1819,7 +1824,7 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                <p className="text-[10.5px] text-slate-700 leading-relaxed">
+                <p className="text-[10.5px] text-slate-700 leading-relaxed font-sans">
                   {googleAuthToken ? (
                     <>
                       Los cambios también se guardarán automáticamente en la pestaña <strong>Equipos</strong>, <strong>Licencias</strong> y <strong>Dados de Baja</strong> del Excel compartido.
@@ -1849,11 +1854,94 @@ export default function App() {
                         alert("No se pudo conectar con tu Google para Sheets. Asegúrate de permitir las ventanas emergentes (popups). Detalle: " + (err instanceof Error ? err.message : String(err)));
                       }
                     }}
-                    className="w-full bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 py-2 px-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    className="w-full bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 py-2 px-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs font-sans"
                   >
                     🔐 Autorizar y Vincular Google Sheets
                   </button>
                 )}
+
+                {/* Advanced Firebase Config for Unauthorized Vercel Domain error */}
+                <div className="border-t border-emerald-100/50 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFirebaseConfigPanel(!showFirebaseConfigPanel)}
+                    className="w-full text-left text-[9px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-between py-1 transition-all"
+                  >
+                    <span>🛠️ ¿Error de dominio (unauthorized-domain)? Configuración de Firebase</span>
+                    <span className="font-mono text-xs">{showFirebaseConfigPanel ? "▲" : "▼"}</span>
+                  </button>
+                  
+                  {showFirebaseConfigPanel && (
+                    <div className="mt-2 text-[10px] space-y-2 bg-white/70 p-3 rounded-xl border border-slate-200/55 text-slate-700 animate-in fade-in slide-in-from-top-1 durarion-150">
+                      <p className="font-semibold text-slate-900">
+                        ⚡ ¿Por qué ocurre este error en Vercel?
+                      </p>
+                      <p className="leading-relaxed">
+                        Por seguridad de Google, el proyecto Firebase por defecto no permite inicios de sesión desde dominios no autorizados como su sitio en Vercel (<code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px]">inventario-pi-peach.vercel.app</code>).
+                      </p>
+                      <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-[9.5px] leading-relaxed space-y-1 text-indigo-950 font-sans">
+                        <p className="font-black">💡 SOLUCIÓN (2 MINUTOS):</p>
+                        <ol className="list-decimal pl-3.5 space-y-1">
+                          <li>Crea un proyecto gratis en <strong>Firebase Console</strong> (console.firebase.google.com).</li>
+                          <li>Activa <strong>Google Authentication</strong> y agrega su dominio <code className="bg-white/80 px-1 text-[9px] rounded font-mono">inventario-pi-peach.vercel.app</code> en <span className="underline font-bold">Authorized Domains</span>.</li>
+                          <li>Añade una Web App, copia su SDK configuration JSON y pégalo aquí abajo:</li>
+                        </ol>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] font-black uppercase text-slate-400 font-mono">
+                          Firebase Config JSON
+                        </label>
+                        <textarea
+                          placeholder='{&#10;  "apiKey": "...",&#10;  "authDomain": "...",&#10;  "projectId": "...",&#10;  "appId": "..."&#10;}'
+                          value={customFirebaseConfigJson}
+                          onChange={(e) => setCustomFirebaseConfigJson(e.target.value)}
+                          className="w-full h-24 bg-slate-50 border border-slate-200 rounded-xl p-2 font-mono text-[8.5px] leading-relaxed outline-none focus:bg-white focus:border-emerald-400 transition-all font-semibold"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!customFirebaseConfigJson.trim()) {
+                              alert("Por favor pega un JSON válido.");
+                              return;
+                            }
+                            try {
+                              const parsed = JSON.parse(customFirebaseConfigJson);
+                              if (!parsed.apiKey || !parsed.authDomain) {
+                                throw new Error('El JSON debe contener al menos "apiKey" y "authDomain".');
+                              }
+                              localStorage.setItem("sia_custom_firebase_config", JSON.stringify(parsed, null, 2));
+                              alert("¡Configuración guardada correctamente! La aplicación se recargará para aplicar las nuevas credenciales de Firebase.");
+                              window.location.reload();
+                            } catch (e: any) {
+                              alert("JSON no válido: " + e.message);
+                            }
+                          }}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-750 text-white font-extrabold text-[9px] py-2 px-2.5 rounded-lg uppercase tracking-wider transition-all cursor-pointer text-center"
+                        >
+                          Guardar y Recargar
+                        </button>
+                        {localStorage.getItem("sia_custom_firebase_config") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              localStorage.removeItem("sia_custom_firebase_config");
+                              setCustomFirebaseConfigJson("");
+                              alert("Se eliminó la configuración personalizada. Retornando a la de fábrica. La aplicación se recargará.");
+                              window.location.reload();
+                            }}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-[9px] py-2 px-2.5 rounded-lg uppercase tracking-wider transition-all cursor-pointer text-center"
+                          >
+                            Por Defecto
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Password authorization form */}
