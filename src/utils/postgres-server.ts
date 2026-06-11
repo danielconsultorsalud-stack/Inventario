@@ -95,6 +95,8 @@ export async function createTables(poolInstance: pg.Pool) {
         alm1 TEXT,
         alm2 TEXT,
         alm3 TEXT,
+        alm4 TEXT,
+        otros TEXT,
         mon1 TEXT,
         mon2 TEXT,
         wifi TEXT,
@@ -105,6 +107,11 @@ export async function createTables(poolInstance: pg.Pool) {
         licencia_ids TEXT,
         comentarios TEXT
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE sia_assets ADD COLUMN IF NOT EXISTS alm4 TEXT;
+      ALTER TABLE sia_assets ADD COLUMN IF NOT EXISTS otros TEXT;
     `);
 
     await client.query(`
@@ -382,8 +389,8 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
           
           const columns = [
             "puesto_id", "nombre_equipo", "asignado_a", "area_select", "board", "video", "procesador",
-            "ram1", "ram2", "ram3", "ram4", "alm1", "alm2", "alm3", "mon1", "mon2", "wifi", "mouse", "teclado",
-            "camara", "auriculares", "licencia_ids", "comentarios"
+            "ram1", "ram2", "ram3", "ram4", "alm1", "alm2", "alm3", "alm4", "mon1", "mon2", "wifi", "mouse", "teclado",
+            "camara", "auriculares", "otros", "licencia_ids", "comentarios"
           ];
           
           // Chunk inserts in batches of 50 to avoid parameter limits and speed up execution
@@ -416,6 +423,7 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
                 castAsset.alm1 || null,
                 castAsset.alm2 || null,
                 castAsset.alm3 || null,
+                castAsset.alm4 || null,
                 castAsset.mon1 || null,
                 castAsset.mon2 || null,
                 castAsset.wifi || null,
@@ -423,6 +431,7 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
                 castAsset.teclado || null,
                 castAsset.camara || null,
                 castAsset.auriculares || null,
+                castAsset.otros || null,
                 licIds || null,
                 castAsset.comentarios || null,
               ];
@@ -450,6 +459,7 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
                 alm1 = EXCLUDED.alm1,
                 alm2 = EXCLUDED.alm2,
                 alm3 = EXCLUDED.alm3,
+                alm4 = EXCLUDED.alm4,
                 mon1 = EXCLUDED.mon1,
                 mon2 = EXCLUDED.mon2,
                 wifi = EXCLUDED.wifi,
@@ -457,6 +467,7 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
                 teclado = EXCLUDED.teclado,
                 camara = EXCLUDED.camara,
                 auriculares = EXCLUDED.auriculares,
+                otros = EXCLUDED.otros,
                 licencia_ids = EXCLUDED.licencia_ids,
                 comentarios = EXCLUDED.comentarios
             `;
@@ -569,6 +580,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
         alm1: r.alm1 || undefined,
         alm2: r.alm2 || undefined,
         alm3: r.alm3 || undefined,
+        alm4: r.alm4 || undefined,
         mon1: r.mon1 || undefined,
         mon2: r.mon2 || undefined,
         wifi: r.wifi || undefined,
@@ -576,6 +588,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
         teclado: r.teclado || undefined,
         camara: r.camara || undefined,
         auriculares: r.auriculares || undefined,
+        otros: r.otros || undefined,
         licencia_id: licencia_ids[0] || undefined,
         licencia_ids: licencia_ids,
         comentarios: r.comentarios || undefined,

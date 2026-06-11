@@ -1116,6 +1116,7 @@ export default function App() {
       "Alm 1",
       "Alm 2",
       "Alm 3",
+      "Alm 4",
       "Mon 1",
       "Mon 2",
       "Wifi",
@@ -1123,6 +1124,7 @@ export default function App() {
       "Teclado",
       "Camara",
       "Auriculares",
+      "Otros",
       "Licencia Activa",
       "Comentarios",
     ];
@@ -1147,6 +1149,7 @@ export default function App() {
           formatComponentValue(d.alm1),
           formatComponentValue(d.alm2),
           formatComponentValue(d.alm3),
+          formatComponentValue(d.alm4),
           formatComponentValue(d.mon1),
           formatComponentValue(d.mon2),
           formatComponentValue(d.wifi),
@@ -1154,6 +1157,7 @@ export default function App() {
           formatComponentValue(d.teclado),
           formatComponentValue(d.camara),
           formatComponentValue(d.auriculares),
+          formatComponentValue(d.otros),
           (() => {
             const ids = d.licencia_ids || (d.licencia_id ? [d.licencia_id] : []);
             if (ids.length === 0) return "Ninguna";
@@ -1279,7 +1283,7 @@ export default function App() {
           .map((r) => formatComponentValue(r))
           .filter(Boolean)
           .join(" | ")}
-        disk={[hoveredAsset?.alm1, hoveredAsset?.alm2, hoveredAsset?.alm3]
+        disk={[hoveredAsset?.alm1, hoveredAsset?.alm2, hoveredAsset?.alm3, hoveredAsset?.alm4]
           .map((d) => formatComponentValue(d))
           .filter(Boolean)
           .join(" | ")}

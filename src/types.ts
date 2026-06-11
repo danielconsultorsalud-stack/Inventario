@@ -38,6 +38,8 @@ export interface AssetData {
   alm1?: string;
   alm2?: string;
   alm3?: string;
+  alm4?: string;
+  otros?: string;
   mon1?: string;
   mon2?: string;
   wifi?: string;

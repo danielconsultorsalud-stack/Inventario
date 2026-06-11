@@ -353,7 +353,7 @@ export const generatePDFReport = (
       specsList.push({ label: "Memorias RAM", value: ramsList || "Ninguna asignada" });
 
       // Add storage
-      const disksList = [d.alm1, d.alm2, d.alm3]
+      const disksList = [d.alm1, d.alm2, d.alm3, d.alm4]
         .map((di) => formatComponentLabel(di))
         .filter((di) => di !== "Ninguno / Libre")
         .join(" | ");
@@ -373,6 +373,11 @@ export const generatePDFReport = (
 
       // Add Networking
       specsList.push({ label: "Red / WiFi", value: d.wifi ? formatComponentLabel(d.wifi) : "No asignado / Integrado" });
+
+      // Add Otros/Otros Componentes
+      if (d.otros && d.otros !== "Ninguno / Libre") {
+        specsList.push({ label: "Otros Componentes", value: formatComponentLabel(d.otros) });
+      }
 
       // Add License
       const licIds = d.licencia_ids || (d.licencia_id ? [d.licencia_id] : []);

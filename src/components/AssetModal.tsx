@@ -22,8 +22,8 @@ interface AssetModalProps {
 const isComponentKey = (key: string, componentTypes: ComponentType[] = []): boolean => {
   const standardKeys = [
     "board", "procesador", "ram1", "ram2", "ram3", "ram4",
-    "alm1", "alm2", "alm3", "video", "wifi", "mouse", "teclado",
-    "camara", "auriculares", "mon1", "mon2"
+    "alm1", "alm2", "alm3", "alm4", "video", "wifi", "mouse", "teclado",
+    "camara", "auriculares", "mon1", "mon2", "otros"
   ];
   if (standardKeys.includes(key)) return true;
   return componentTypes.some((t) => t.id === key);
@@ -75,8 +75,8 @@ export const AssetModal: React.FC<AssetModalProps> = ({
       const initialManual: Record<string, boolean> = {};
       const componentFields = [
         "board", "video", "procesador", "ram1", "ram2", "ram3", "ram4",
-        "alm1", "alm2", "alm3", "mon1", "mon2", "wifi", "mouse", "teclado",
-        "camara", "auriculares",
+        "alm1", "alm2", "alm3", "alm4", "mon1", "mon2", "wifi", "mouse", "teclado",
+        "camara", "auriculares", "otros",
         ...(componentTypes || []).map((t) => t.id)
       ];
 
@@ -117,8 +117,8 @@ export const AssetModal: React.FC<AssetModalProps> = ({
       
       const componentFields = [
         "board", "video", "procesador", "ram1", "ram2", "ram3", "ram4",
-        "alm1", "alm2", "alm3", "mon1", "mon2", "wifi", "mouse", "teclado",
-        "camara", "auriculares",
+        "alm1", "alm2", "alm3", "alm4", "mon1", "mon2", "wifi", "mouse", "teclado",
+        "camara", "auriculares", "otros",
         ...(componentTypes || []).map((t) => t.id)
       ];
       
@@ -605,6 +605,7 @@ export const AssetModal: React.FC<AssetModalProps> = ({
                 {renderHardwareField("alm1", "Almacenamiento Principal (SSD/HDD)", "almacenamiento", "Ej. SSD NVMe 512GB")}
                 {renderHardwareField("alm2", "Almacenamiento Secundario", "almacenamiento", "Unidad opcional")}
                 {renderHardwareField("alm3", "Almacenamiento Terciario", "almacenamiento", "Unidad opcional")}
+                {renderHardwareField("alm4", "Almacenamiento Cuaternario", "almacenamiento", "Unidad opcional")}
                 {renderHardwareField("mon1", "Monitor Principal", "monitor", "Ej. Monitor LG IPS 24''")}
                 {renderHardwareField("mon2", "Monitor Secundario", "monitor", "Monitor auxiliar opcional")}
               </div>

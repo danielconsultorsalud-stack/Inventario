@@ -100,6 +100,7 @@ export const syncDatabaseToGoogleSheet = async (
     "ALMACENAMIENTO 1 (DISCO)",
     "ALMACENAMIENTO 2 (DISCO)",
     "ALMACENAMIENTO 3 (DISCO)",
+    "ALMACENAMIENTO 4 (DISCO)",
     "TARJETA MADRE (BOARD)",
     "TARJETA DE VIDEO (GPU)",
     "PANTALLA (MONITOR)",
@@ -107,6 +108,7 @@ export const syncDatabaseToGoogleSheet = async (
     "MOUSE",
     "CÁMARA",
     "AURICULARES",
+    "OTROS COMPONENTES",
     "LICENCIAS ACTIVAS",
     "COMENTARIOS / OBSERVACIONES"
   ];
@@ -154,6 +156,7 @@ export const syncDatabaseToGoogleSheet = async (
       formatComponent(d.alm1),
       formatComponent(d.alm2),
       formatComponent(d.alm3),
+      formatComponent(d.alm4),
       formatComponent(d.board),
       formatComponent(d.video),
       formatComponent(d.pantalla),
@@ -161,6 +164,7 @@ export const syncDatabaseToGoogleSheet = async (
       formatComponent(d.mouse),
       formatComponent(d.camara),
       formatComponent(d.auriculares),
+      formatComponent(d.otros),
       licensesText,
       d.comentarios || ""
     ]);
