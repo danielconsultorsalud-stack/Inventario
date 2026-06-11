@@ -91,6 +91,22 @@ async function startServer() {
         await createTables(pool);
         isPostgresConnected = true;
         console.log("[Postgres] ¡Conexión establecida con éxito!");
+
+        // Auto-migrate if Postgres counts are empty but we have local backup data
+        try {
+          const countCheck = await pool.query("SELECT COUNT(*) FROM sia_assets");
+          const count = parseInt(countCheck.rows[0].count || "0", 10);
+          if (count === 0) {
+            const localData = readStore();
+            if (localData && Object.keys(localData.database || {}).length > 0) {
+              console.log("[Postgres Start] La base de datos de Neon está vacía. Iniciando auto-migración de datos locales...");
+              await migrateAllToPostgres(pool, localData);
+              console.log("[Postgres Start] ¡Auto-migración inicial completada con éxito!");
+            }
+          }
+        } catch (migErr) {
+          console.error("[Postgres Start] Error al intentar auto-migrar datos de inicio:", migErr);
+        }
       }
     } catch (err: any) {
       console.error("[Postgres] Error en la conexión inicial:", err);
@@ -136,6 +152,22 @@ async function startServer() {
       writePostgresConfig(connectionString);
       isPostgresConnected = true;
       postgresErrorMsg = "";
+
+      // Auto-migrate if blank
+      try {
+        const countCheck = await pool.query("SELECT COUNT(*) FROM sia_assets");
+        const count = parseInt(countCheck.rows[0].count || "0", 10);
+        if (count === 0) {
+          const localData = readStore();
+          if (localData && Object.keys(localData.database || {}).length > 0) {
+            console.log("[Postgres Setup] La nueva base de datos está vacía. Iniciando auto-migración de datos locales...");
+            await migrateAllToPostgres(pool, localData);
+            console.log("[Postgres Setup] ¡Auto-migración completada con éxito!");
+          }
+        }
+      } catch (migErr) {
+        console.error("[Postgres Setup] Error al intentar auto-migrar tras cambiar conexión:", migErr);
+      }
 
       console.log("[Postgres] Nueva base de datos guardada y conectada.");
       res.json({ success: true, message: "Conexión a Postgres establecida y verificada correctamente." });

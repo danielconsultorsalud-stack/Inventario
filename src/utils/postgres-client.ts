@@ -7,7 +7,13 @@ const DEFAULT_CONNECTION_STRING = postgresConfig.connectionString || "";
 export function getConnectionString(): string {
   if (typeof window !== "undefined") {
     const saved = localStorage.getItem("sia_postgres_connection_url");
-    if (saved) return saved;
+    if (saved) {
+      if (saved.includes("ep-muddy-pine")) {
+        localStorage.setItem("sia_postgres_connection_url", DEFAULT_CONNECTION_STRING);
+        return DEFAULT_CONNECTION_STRING;
+      }
+      return saved;
+    }
   }
   return DEFAULT_CONNECTION_STRING;
 }
@@ -132,13 +138,15 @@ export async function clientCreateTables() {
           camara TEXT,
           auriculares TEXT,
           licencia_ids TEXT,
-          comentarios TEXT
+          comentarios TEXT,
+          custom_components TEXT
         );
       `);
 
       await queryFn(`
         ALTER TABLE sia_assets ADD COLUMN IF NOT EXISTS alm4 TEXT;
         ALTER TABLE sia_assets ADD COLUMN IF NOT EXISTS otros TEXT;
+        ALTER TABLE sia_assets ADD COLUMN IF NOT EXISTS custom_components TEXT;
       `);
 
       await queryFn(`
@@ -414,7 +422,7 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
             const columns = [
               "puesto_id", "nombre_equipo", "asignado_a", "area_select", "board", "video", "procesador",
               "ram1", "ram2", "ram3", "ram4", "alm1", "alm2", "alm3", "alm4", "mon1", "mon2", "wifi", "mouse", "teclado",
-              "camara", "auriculares", "otros", "licencia_ids", "comentarios"
+              "camara", "auriculares", "otros", "licencia_ids", "comentarios", "custom_components"
             ];
             
             // Chunk inserts in batches of 50 to avoid parameter limits and speed up execution
@@ -432,6 +440,19 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
                   ? castAsset.licencia_ids.join(",")
                   : castAsset.licencia_id || "";
                   
+                const standardKeys = [
+                  "nombre_equipo", "asignado_a", "area_select", "board", "video", "procesador",
+                  "ram1", "ram2", "ram3", "ram4", "alm1", "alm2", "alm3", "alm4", "mon1", "mon2", "wifi", "mouse", "teclado",
+                  "camara", "auriculares", "otros", "licencia_id", "licencia_ids", "comentarios"
+                ];
+                const customComps: Record<string, string> = {};
+                Object.entries(castAsset).forEach(([k, v]) => {
+                  if (v !== undefined && v !== null && v !== "" && !standardKeys.includes(k)) {
+                    customComps[k] = String(v);
+                  }
+                });
+                const customCompsStr = Object.keys(customComps).length > 0 ? JSON.stringify(customComps) : null;
+
                 const rowValues = [
                   puestoId,
                   castAsset.nombre_equipo || null,
@@ -458,6 +479,7 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
                   castAsset.otros || null,
                   licIds || null,
                   castAsset.comentarios || null,
+                  customCompsStr,
                 ];
                 
                 const offset = i * columns.length;
@@ -493,7 +515,8 @@ export async function clientSaveFieldToPostgres(field: string, value: any, exter
                   auriculares = EXCLUDED.auriculares,
                   otros = EXCLUDED.otros,
                   licencia_ids = EXCLUDED.licencia_ids,
-                  comentarios = EXCLUDED.comentarios
+                  comentarios = EXCLUDED.comentarios,
+                  custom_components = EXCLUDED.custom_components
               `;
               await queryFn(queryText, flatValues);
             }
@@ -591,6 +614,14 @@ export async function clientLoadAllFromPostgres() {
       assetsRows.forEach((r: any) => {
         const licIdsText = r.licencia_ids || "";
         const licencia_ids = licIdsText ? licIdsText.split(",") : [];
+        let parsedCustom: Record<string, any> = {};
+        if (r.custom_components) {
+          try {
+            parsedCustom = JSON.parse(r.custom_components);
+          } catch (e) {
+            console.error("Error parsing custom components JSON:", e);
+          }
+        }
         database[r.puesto_id] = {
           nombre_equipo: r.nombre_equipo || undefined,
           asignado_a: r.asignado_a || undefined,
@@ -617,6 +648,7 @@ export async function clientLoadAllFromPostgres() {
           licencia_id: licencia_ids[0] || undefined,
           licencia_ids: licencia_ids,
           comentarios: r.comentarios || undefined,
+          ...parsedCustom
         };
       });
 
