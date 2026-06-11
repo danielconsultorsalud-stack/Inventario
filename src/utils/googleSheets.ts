@@ -78,6 +78,9 @@ export const ensureSheetsExist = async (
   sheetIdEquipos: number;
   sheetIdLicencias: number;
   sheetIdBajas: number;
+  titleEquipos: string;
+  titleLicencias: string;
+  titleBajas: string;
 }> => {
   const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
   const getRes = await fetch(getUrl, {
@@ -90,13 +93,22 @@ export const ensureSheetsExist = async (
   const meta = await getRes.json();
   const sheets: any[] = meta.sheets || [];
   
-  let existingTitles = sheets.map(s => s.properties.title);
+  const existingTitles = sheets.map(s => s.properties.title);
+  
+  const findTitleCaseInsensitive = (title: string): string | undefined => {
+    return existingTitles.find(t => t.toLowerCase() === title.toLowerCase());
+  };
+
+  const hasEquipos = findTitleCaseInsensitive("Equipos");
+  const hasLicencias = findTitleCaseInsensitive("Licencias");
+  const hasBajas = findTitleCaseInsensitive("Dados de Baja");
+
   const requests: any[] = [];
   
-  // Decide if we should rename standard Sheet1 or Hoja 1 to Equipos
+  // Decide if we should rename standard Sheet1 or Hoja 1 or Hoja1 to Equipos
   let renameSheet1 = false;
   const sheet1Obj = sheets.find(s => s.properties.title === "Sheet1" || s.properties.title === "Hoja 1" || s.properties.title === "Hoja1");
-  if (!existingTitles.includes("Equipos") && sheet1Obj) {
+  if (!hasEquipos && sheet1Obj) {
     renameSheet1 = true;
   }
 
@@ -110,9 +122,7 @@ export const ensureSheetsExist = async (
         fields: "title"
       }
     });
-    existingTitles.push("Equipos");
-    existingTitles = existingTitles.filter(t => t !== sheet1Obj.properties.title);
-  } else if (!existingTitles.includes("Equipos")) {
+  } else if (!hasEquipos) {
     requests.push({
       addSheet: {
         properties: {
@@ -122,7 +132,7 @@ export const ensureSheetsExist = async (
     });
   }
 
-  if (!existingTitles.includes("Licencias")) {
+  if (!hasLicencias) {
     requests.push({
       addSheet: {
         properties: {
@@ -132,7 +142,7 @@ export const ensureSheetsExist = async (
     });
   }
 
-  if (!existingTitles.includes("Dados de Baja")) {
+  if (!hasBajas) {
     requests.push({
       addSheet: {
         properties: {
@@ -156,7 +166,7 @@ export const ensureSheetsExist = async (
       console.warn("No se pudieron inicializar todas las pestañas de hojas:", await updateRes.text());
     }
 
-    // Refresh to get any newly created sheetIds
+    // Refresh to get any newly created sheetIds and updated names
     const refreshRes = await fetch(getUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -164,17 +174,23 @@ export const ensureSheetsExist = async (
       const refreshedMeta = await refreshRes.json();
       const updatedSheets: any[] = refreshedMeta.sheets || [];
       return {
-        sheetIdEquipos: updatedSheets.find(s => s.properties.title === "Equipos")?.properties.sheetId ?? 0,
-        sheetIdLicencias: updatedSheets.find(s => s.properties.title === "Licencias")?.properties.sheetId ?? 0,
-        sheetIdBajas: updatedSheets.find(s => s.properties.title === "Dados de Baja")?.properties.sheetId ?? 0
+        sheetIdEquipos: updatedSheets.find(s => s.properties.title.toLowerCase() === "equipos")?.properties.sheetId ?? updatedSheets[0]?.properties.sheetId ?? 0,
+        sheetIdLicencias: updatedSheets.find(s => s.properties.title.toLowerCase() === "licencias")?.properties.sheetId ?? 0,
+        sheetIdBajas: updatedSheets.find(s => s.properties.title.toLowerCase() === "dados de baja")?.properties.sheetId ?? 0,
+        titleEquipos: updatedSheets.find(s => s.properties.title.toLowerCase() === "equipos")?.properties.title ?? "Equipos",
+        titleLicencias: updatedSheets.find(s => s.properties.title.toLowerCase() === "licencias")?.properties.title ?? "Licencias",
+        titleBajas: updatedSheets.find(s => s.properties.title.toLowerCase() === "dados de baja")?.properties.title ?? "Dados de Baja"
       };
     }
   }
 
   return {
-    sheetIdEquipos: sheets.find(s => s.properties.title === "Equipos")?.properties.sheetId ?? sheets[0]?.properties.sheetId ?? 0,
-    sheetIdLicencias: sheets.find(s => s.properties.title === "Licencias")?.properties.sheetId ?? 0,
-    sheetIdBajas: sheets.find(s => s.properties.title === "Dados de Baja")?.properties.sheetId ?? 0
+    sheetIdEquipos: sheets.find(s => s.properties.title.toLowerCase() === "equipos")?.properties.sheetId ?? sheets[0]?.properties.sheetId ?? 0,
+    sheetIdLicencias: sheets.find(s => s.properties.title.toLowerCase() === "licencias")?.properties.sheetId ?? 0,
+    sheetIdBajas: sheets.find(s => s.properties.title.toLowerCase() === "dados de baja")?.properties.sheetId ?? 0,
+    titleEquipos: sheets.find(s => s.properties.title.toLowerCase() === "equipos")?.properties.title ?? "Equipos",
+    titleLicencias: sheets.find(s => s.properties.title.toLowerCase() === "licencias")?.properties.title ?? "Licencias",
+    titleBajas: sheets.find(s => s.properties.title.toLowerCase() === "dados de baja")?.properties.title ?? "Dados de Baja"
   };
 };
 
@@ -190,7 +206,7 @@ export const syncDatabaseToGoogleSheet = async (
   componentTypes: any[],
   decommissionedItems: DecommissionedItem[]
 ): Promise<void> => {
-  // Ensure all tabs exist and obtain their sheet IDs
+  // Ensure all tabs exist and obtain their sheet IDs and exact titles
   const sheetIds = await ensureSheetsExist(token, spreadsheetId);
 
   const formatComponentSingle = (val: string): string => {
@@ -378,9 +394,9 @@ export const syncDatabaseToGoogleSheet = async (
       },
       body: JSON.stringify({
         ranges: [
-          "Equipos!A1:Z500",
-          "Licencias!A1:Z200",
-          "'Dados de Baja'!A1:Z1000"
+          `'${sheetIds.titleEquipos}'!A1:Z500`,
+          `'${sheetIds.titleLicencias}'!A1:Z200`,
+          `'${sheetIds.titleBajas}'!A1:Z1000`
         ]
       })
     });
@@ -400,15 +416,15 @@ export const syncDatabaseToGoogleSheet = async (
       valueInputOption: "RAW",
       data: [
         {
-          range: "Equipos!A1",
+          range: `'${sheetIds.titleEquipos}'!A1`,
           values: rowsEquipos
         },
         {
-          range: "Licencias!A1",
+          range: `'${sheetIds.titleLicencias}'!A1`,
           values: rowsLicencias
         },
         {
-          range: "'Dados de Baja'!A1",
+          range: `'${sheetIds.titleBajas}'!A1`,
           values: rowsBajas
         }
       ]
