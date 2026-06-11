@@ -372,6 +372,8 @@ export default function App() {
       const updatedLogs = [newLog, ...currentLogs].slice(0, 500);
       setAuditLogs(updatedLogs);
 
+      let sheetsSyncMessage = "";
+
       if (isStaticHosting) {
         if (!getConnectionString()) throw new Error("No hay una base de datos conectada. Configúrala en el Setup de Postgres.");
         
@@ -385,9 +387,27 @@ export default function App() {
           decommissionedItems
         });
 
+        // Background sync to Google Sheets if spreadsheet is connected and authorized
+        if (googleSpreadsheetId && googleAuthToken) {
+          try {
+            await syncDatabaseToGoogleSheet(
+              googleAuthToken,
+              googleSpreadsheetId,
+              database,
+              licenses,
+              inventoryItems,
+              componentTypes
+            );
+            sheetsSyncMessage = " y Excel de Google Sheets actualizado correctamente.";
+          } catch (sheetsErr) {
+            console.error("Auto sheets sync during save failed:", sheetsErr);
+            sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión de Google expiró).";
+          }
+        }
+
         setIsSaveConfirmOpen(false);
         setCloudPasswordInput("");
-        alert("¡Éxito! Todos los datos locales se han guardado y respaldado de forma segura en la base de datos (Directo).");
+        alert(`¡Éxito! Todos los datos locales se han guardado de forma segura en la base de datos${sheetsSyncMessage}`);
         return;
       }
 
@@ -410,10 +430,28 @@ export default function App() {
       if (!res.ok) {
         throw new Error("El servidor devolvió un error al guardar: " + res.status);
       }
+
+      // Background sync to Google Sheets if spreadsheet is connected and authorized
+      if (googleSpreadsheetId && googleAuthToken) {
+        try {
+          await syncDatabaseToGoogleSheet(
+            googleAuthToken,
+            googleSpreadsheetId,
+            database,
+            licenses,
+            inventoryItems,
+            componentTypes
+          );
+          sheetsSyncMessage = " y Excel de Google Sheets actualizado correctamente.";
+        } catch (sheetsErr) {
+          console.error("Auto sheets sync during save failed:", sheetsErr);
+          sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión de Google expiró).";
+        }
+      }
       
       setIsSaveConfirmOpen(false);
       setCloudPasswordInput("");
-      alert("¡Éxito! Todos los datos locales se han guardado y respaldado de forma segura en la base de datos.");
+      alert(`¡Éxito! Todos los datos locales se han guardado de forma segura en la base de datos${sheetsSyncMessage}`);
     } catch (err: any) {
       console.error("Failed to save state to Server/Postgres:", err);
       const errMsg = err?.message || String(err);
@@ -427,7 +465,7 @@ export default function App() {
     }
   };
 
-  const handleConnectAndSyncGoogleSheets = async () => {
+  const handleConnectAndSyncGoogleSheets = async (openImmediately: boolean = false) => {
     setIsSyncingToSheets(true);
     try {
       let token = googleAuthToken;
@@ -479,7 +517,7 @@ export default function App() {
       }
 
       // 3. Write/Sync database to sheet organized by columns
-      await syncDatabaseToGoogleSheet(token, sheetId, database, licenses);
+      await syncDatabaseToGoogleSheet(token, sheetId, database, licenses, inventoryItems, componentTypes);
       
       // Update audit log
       const currentLogs = [...auditLogs];
@@ -487,12 +525,16 @@ export default function App() {
         id: "sheet-sync-log-" + Date.now(),
         timestamp: new Date().toISOString(),
         action: "GOOGLE_SHEETS",
-        description: `Se exportó y sincronizó correctamente el inventario con Google Sheets (organizado en columnas).`,
+        description: `Se exportó y sincronizó correctamente el inventario con Google Sheets (detalles de referencias de componentes incluidos).`,
         user: userObj?.email || "danielconsultorsalud@gmail.com"
       };
       setAuditLogs([newLog, ...currentLogs].slice(0, 500));
       
-      alert("¡Éxito! Todo el inventario se ha sincronizado correctamente con Google Sheets (organizado en columnas).");
+      if (openImmediately && sheetUrl) {
+        window.open(sheetUrl, "_blank");
+      } else {
+        alert("¡Éxito! Todo el inventario se ha sincronizado correctamente con Google Sheets (organizado en columnas con descripciones de referencias).");
+      }
     } catch (err: any) {
       console.error("Google Sheets sync failed:", err);
       const errMsg = err?.message || String(err);
@@ -1399,26 +1441,14 @@ export default function App() {
               </button>
 
               <button
-                onClick={handleConnectAndSyncGoogleSheets}
+                onClick={() => handleConnectAndSyncGoogleSheets(true)}
                 disabled={isSyncingToSheets}
-                className="flex-1 sm:flex-initial bg-emerald-50 hover:bg-emerald-100/90 border border-emerald-200/80 text-emerald-850 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
-                title={googleSpreadsheetUrl ? "Sincronizar datos con tu hoja de cálculo Google Sheets" : "Conectar con Google Sheets y crear hoja de cálculo"}
+                className="flex-1 sm:flex-initial bg-emerald-700 hover:bg-emerald-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/15 disabled:opacity-60"
+                title="Sincronizar datos y abrir la hoja de cálculo de Google Sheets"
               >
-                <FileSpreadsheet size={12} className={isSyncingToSheets ? "animate-spin text-emerald-600" : "text-emerald-700"} />
-                {isSyncingToSheets ? "Sincronizando..." : googleSpreadsheetId ? "Sincronizar Sheets" : "Conectar Sheets"}
+                <FileSpreadsheet size={12} className={isSyncingToSheets ? "animate-spin text-white" : "text-white"} />
+                {isSyncingToSheets ? "Sincronizando..." : "🟢 Google Sheets / Excel"}
               </button>
-
-              {googleSpreadsheetUrl && (
-                <a
-                  href={googleSpreadsheetUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 sm:flex-initial bg-white hover:bg-slate-50 border border-emerald-200 text-emerald-850 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                  title="Abrir hoja de cálculo vinculada en una nueva pestaña"
-                >
-                  🟢 Abrir Excel/Sheet
-                </a>
-              )}
 
 
 

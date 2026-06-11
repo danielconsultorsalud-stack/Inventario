@@ -84,14 +84,35 @@ export const syncDatabaseToGoogleSheet = async (
   token: string,
   spreadsheetId: string,
   database: Record<string, AssetData>,
-  licenses: License[]
+  licenses: License[],
+  inventoryItems: any[],
+  componentTypes: any[]
 ): Promise<void> => {
+  const formatComponentSingle = (val: string): string => {
+    if (!val || val === "Ninguno / Libre") return "Ninguno / Libre";
+    const invItem = (inventoryItems || []).find((item: any) => item.id === val);
+    return invItem ? invItem.name : val;
+  };
+
+  const formatComponentRef = (val: string | string[] | undefined): string => {
+    if (!val) return "Ninguno / Libre";
+    if (Array.isArray(val)) {
+      return val.map((v) => formatComponentSingle(v)).join(" | ");
+    }
+    return formatComponentSingle(val);
+  };
+
+  const customClasificaciones = (componentTypes || []).filter(
+    (t) => !["board", "video", "procesador", "ram", "almacenamiento", "monitor", "wifi", "mouse", "teclado", "camara", "auriculares"].includes(t.id)
+  );
+
   // Define layout/table headers
   const headers = [
     "ID PUESTO",
     "ÁREA / UBICACIÓN",
     "NOMBRE EQUIPO",
     "RESPONSABLE (ASIGNADO A)",
+    "TARJETA MADRE (BOARD)",
     "PROCESADOR (CPU)",
     "RAM 1",
     "RAM 2",
@@ -101,14 +122,16 @@ export const syncDatabaseToGoogleSheet = async (
     "ALMACENAMIENTO 2 (DISCO)",
     "ALMACENAMIENTO 3 (DISCO)",
     "ALMACENAMIENTO 4 (DISCO)",
-    "TARJETA MADRE (BOARD)",
     "TARJETA DE VIDEO (GPU)",
-    "PANTALLA (MONITOR)",
+    "PANTALLA (MONITOR 1)",
+    "PANTALLA (MONITOR 2)",
+    "RED / WIFI",
     "TECLADO",
     "MOUSE",
     "CÁMARA",
     "AURICULARES",
     "OTROS COMPONENTES",
+    ...customClasificaciones.map((c) => c.name.toUpperCase()),
     "LICENCIAS ACTIVAS",
     "COMENTARIOS / OBSERVACIONES"
   ];
@@ -143,31 +166,43 @@ export const syncDatabaseToGoogleSheet = async (
       .map((id) => licenses.find((l) => l.id === id)?.name || id)
       .join(" / ") || "Ninguna";
 
-    rows.push([
+    const rowData = [
       getFriendlyPuestoName(puestoId),
       d.area_select || "Sin área",
       d.nombre_equipo || "",
       d.asignado_a || "Sin asignar / Genérico",
-      formatComponent(d.procesador),
-      formatComponent(d.ram1),
-      formatComponent(d.ram2),
-      formatComponent(d.ram3),
-      formatComponent(d.ram4),
-      formatComponent(d.alm1),
-      formatComponent(d.alm2),
-      formatComponent(d.alm3),
-      formatComponent(d.alm4),
-      formatComponent(d.board),
-      formatComponent(d.video),
-      formatComponent(d.pantalla),
-      formatComponent(d.teclado),
-      formatComponent(d.mouse),
-      formatComponent(d.camara),
-      formatComponent(d.auriculares),
-      formatComponent(d.otros),
-      licensesText,
-      d.comentarios || ""
-    ]);
+      formatComponentRef(d.board),
+      formatComponentRef(d.procesador),
+      formatComponentRef(d.ram1),
+      formatComponentRef(d.ram2),
+      formatComponentRef(d.ram3),
+      formatComponentRef(d.ram4),
+      formatComponentRef(d.alm1),
+      formatComponentRef(d.alm2),
+      formatComponentRef(d.alm3),
+      formatComponentRef(d.alm4),
+      formatComponentRef(d.video),
+      formatComponentRef(d.mon1),
+      formatComponentRef(d.mon2),
+      formatComponentRef(d.wifi),
+      formatComponentRef(d.teclado),
+      formatComponentRef(d.mouse),
+      formatComponentRef(d.camara),
+      formatComponentRef(d.auriculares),
+      formatComponentRef(d.otros),
+    ];
+
+    // Add custom dynamic categories
+    customClasificaciones.forEach((cClass) => {
+      const val = d[cClass.id];
+      rowData.push(formatComponentRef(val as string));
+    });
+
+    // Add licenses and observations
+    rowData.push(licensesText);
+    rowData.push(d.comentarios || "");
+
+    rows.push(rowData);
   });
 
   // Overwrite sheet values
