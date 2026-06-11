@@ -9,10 +9,46 @@ import {
   migrateAllToPostgres,
   loadAllFromPostgres
 } from "./src/utils/postgres-server.ts";
+import {
+  getServiceAccountToken,
+  syncDatabaseToGoogleSheetServer
+} from "./src/utils/googleSheetsServer.ts";
 
 const PORT = 3000;
 const DATA_FILE = path.join(process.cwd(), "data-store.json");
 const PG_CONFIG_FILE = path.join(process.cwd(), "postgres-config.json");
+const GOOGLE_SHEETS_CONFIG_FILE = path.join(process.cwd(), "google-sheets-config.json");
+
+// Save/Load Google Sheets back-end integration persistently
+interface SheetsServerConfig {
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  serviceAccountJson: string; // Stored as a raw stringified JSON or plain string
+}
+
+function readSheetsConfig(): SheetsServerConfig {
+  try {
+    if (fs.existsSync(GOOGLE_SHEETS_CONFIG_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(GOOGLE_SHEETS_CONFIG_FILE, "utf8"));
+      return {
+        spreadsheetId: parsed.spreadsheetId || "",
+        spreadsheetUrl: parsed.spreadsheetUrl || "",
+        serviceAccountJson: parsed.serviceAccountJson || ""
+      };
+    }
+  } catch (err) {
+    console.error("[Sheets Setup] Error reading google-sheets-config.json:", err);
+  }
+  return { spreadsheetId: "", spreadsheetUrl: "", serviceAccountJson: "" };
+}
+
+function writeSheetsConfig(config: SheetsServerConfig) {
+  try {
+    fs.writeFileSync(GOOGLE_SHEETS_CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+  } catch (err) {
+    console.error("[Sheets Setup] Error writing google-sheets-config.json:", err);
+  }
+}
 
 // Save/Load Postgres credentials persistently
 function readPostgresConfig(): string {
@@ -267,6 +303,22 @@ async function startServer() {
       }
     }
 
+    // Auto-sync to Google Sheets in background if Service Account is configured
+    const sheetsConfig = readSheetsConfig();
+    if (sheetsConfig.spreadsheetId && sheetsConfig.serviceAccountJson) {
+      (async () => {
+        try {
+          console.log("[Auto-Sync-Backend] Sincronizando datos automáticamente con Google Sheets...");
+          const saObj = JSON.parse(sheetsConfig.serviceAccountJson);
+          const token = await getServiceAccountToken(saObj);
+          await syncDatabaseToGoogleSheetServer(token, sheetsConfig.spreadsheetId, payload);
+          console.log("[Auto-Sync-Backend] ¡Sincronización de Google Sheets completada exitosamente!");
+        } catch (sErr) {
+          console.error("[Auto-Sync-Backend] Error en sincronización automatizada de Sheets:", sErr);
+        }
+      })();
+    }
+
     res.json({ success: true });
   });
 
@@ -305,6 +357,88 @@ async function startServer() {
     });
 
     res.json({ success: true });
+  });
+
+  // Google Sheets Backend Integration Endpoints
+  app.get("/api/google-sheets/status", (req, res) => {
+    const config = readSheetsConfig();
+    let hasServiceAccount = false;
+    let clientEmail = "";
+    if (config.serviceAccountJson) {
+      try {
+        const sa = JSON.parse(config.serviceAccountJson);
+        if (sa.client_email && sa.private_key) {
+          hasServiceAccount = true;
+          clientEmail = sa.client_email;
+        }
+      } catch (e) {}
+    }
+    res.json({
+      configured: !!config.spreadsheetId,
+      hasServiceAccount,
+      clientEmail,
+      spreadsheetId: config.spreadsheetId,
+      spreadsheetUrl: config.spreadsheetUrl
+    });
+  });
+
+  app.post("/api/google-sheets/config", (req, res) => {
+    const { spreadsheetId, spreadsheetUrl, serviceAccountJson } = req.body;
+    
+    const config = readSheetsConfig();
+    if (spreadsheetId !== undefined) config.spreadsheetId = spreadsheetId;
+    if (spreadsheetUrl !== undefined) config.spreadsheetUrl = spreadsheetUrl;
+    if (serviceAccountJson !== undefined) {
+      // If they passed an object, stringify it
+      config.serviceAccountJson = typeof serviceAccountJson === "object" 
+        ? JSON.stringify(serviceAccountJson, null, 2)
+        : serviceAccountJson;
+    }
+    
+    writeSheetsConfig(config);
+    res.json({ success: true, message: "Ajustes de Google Sheets guardados correctamente en el servidor." });
+  });
+
+  app.post("/api/google-sheets/sync", async (req, res) => {
+    const config = readSheetsConfig();
+    if (!config.spreadsheetId || !config.serviceAccountJson) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "No se ha configurado la Hoja de Google Sheets o la Cuenta de Servicio en el servidor." 
+      });
+    }
+
+    try {
+      const saObj = JSON.parse(config.serviceAccountJson);
+      
+      // Load latest unified data (Postgres or local fallback)
+      let payload = req.body && Object.keys(req.body).length > 0 ? req.body : null;
+      if (!payload) {
+        if (isPostgresConnected) {
+          const pool = getPostgresPool();
+          if (pool) {
+            payload = await loadAllFromPostgres(pool);
+            // merge sheet configurations
+            const localStore = readStore();
+            if (localStore.googleSpreadsheetId) payload.googleSpreadsheetId = localStore.googleSpreadsheetId;
+            if (localStore.googleSpreadsheetUrl) payload.googleSpreadsheetUrl = localStore.googleSpreadsheetUrl;
+          }
+        }
+        if (!payload) {
+          payload = readStore();
+        }
+      }
+
+      console.log("[Google Sheets Server Manual Sync] Solicitando token...");
+      const token = await getServiceAccountToken(saObj);
+      console.log("[Google Sheets Server Manual Sync] Actualizando libro:", config.spreadsheetId);
+      await syncDatabaseToGoogleSheetServer(token, config.spreadsheetId, payload);
+      
+      res.json({ success: true, message: "¡Sincronización exitosa! La información ha sido volcada en el Google Sheet." });
+    } catch (err: any) {
+      console.error("[Google Sheets Server Manual Sync] Falló:", err);
+      res.status(500).json({ success: false, message: err?.message || String(err) });
+    }
   });
 
   // API: SSE connections endpoint

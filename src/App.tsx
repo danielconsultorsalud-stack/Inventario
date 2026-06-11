@@ -169,6 +169,32 @@ export default function App() {
     return localStorage.getItem("sia_custom_firebase_config") || "";
   });
 
+  // States for backend Google Sheets service integration
+  const [serverSheetsStatus, setServerSheetsStatus] = useState<{
+    configured: boolean;
+    hasServiceAccount: boolean;
+    clientEmail: string;
+    spreadsheetId: string;
+    spreadsheetUrl: string;
+  } | null>(null);
+  const [showServerSheetsPanel, setShowServerSheetsPanel] = useState(false);
+  const [serverSheetsSaInput, setServerSheetsSaInput] = useState("");
+  const [serverSheetsIdInput, setServerSheetsIdInput] = useState("");
+  const [serverSheetsUrlInput, setServerSheetsUrlInput] = useState("");
+  const [isSavingServerSheetsConfig, setIsSavingServerSheetsConfig] = useState(false);
+
+  const loadServerSheetsStatus = () => {
+    if (isStaticHosting) return;
+    fetch(getApiUrl("/api/google-sheets/status"))
+      .then((res) => res.json())
+      .then((data) => {
+        setServerSheetsStatus(data);
+        if (data.spreadsheetId) setServerSheetsIdInput(data.spreadsheetId);
+        if (data.spreadsheetUrl) setServerSheetsUrlInput(data.spreadsheetUrl);
+      })
+      .catch((err) => console.error("Error al cargar estado de Google Sheets del servidor:", err));
+  };
+
   const [isPostgresModalOpen, setIsPostgresModalOpen] = useState(false);
   const [isPgConnected, setIsPgConnected] = useState(false);
 
@@ -471,7 +497,9 @@ export default function App() {
       }
 
       // Background sync to Google Sheets if spreadsheet is connected and authorized
-      if (googleSpreadsheetId && token) {
+      if (serverSheetsStatus?.hasServiceAccount) {
+        sheetsSyncMessage = " y Excel de Google Sheets actualizado en segundo plano por el servidor.";
+      } else if (googleSpreadsheetId && token) {
         try {
           await syncDatabaseToGoogleSheet(
             token,
@@ -605,6 +633,7 @@ export default function App() {
 
   // Check Neon Postgres Connection Status
   useEffect(() => {
+    loadServerSheetsStatus();
     if (isStaticHosting) {
       const conn = getConnectionString();
       setIsPgConnected(!!conn);
@@ -1804,61 +1833,259 @@ export default function App() {
                   <strong>¡ATENCIÓN!</strong> Al proceder, <strong>se reemplazará por completo</strong> toda la información que esté guardada en la base de datos con los datos que ves en tu pantalla actualmente. Ningún dato remoto anterior podrá recuperarse.
                 </span>
               </p>
-
-              {/* Google Sheets Integration Status with direct button inside modal */}
-              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 space-y-2.5">
+              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${googleAuthToken ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+                    <div className={`w-1.5 h-1.5 rounded-full ${serverSheetsStatus?.hasServiceAccount ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
                     <span className="font-extrabold text-[8px] uppercase tracking-wider text-slate-800 font-sans">
-                      Google Sheets / Excel en línea
+                      Doble Vía - Sincronización Google Sheets
                     </span>
                   </div>
-                  {googleAuthToken ? (
+                  {serverSheetsStatus?.hasServiceAccount ? (
                     <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-sans">
-                      Sesión Activa ({googleUser?.email || "Google"})
+                      Servidor Directo Activo ⚡
+                    </span>
+                  ) : googleAuthToken ? (
+                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-sans">
+                      Sesión Manual Activa ({googleUser?.email || "Google"})
                     </span>
                   ) : (
-                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-mono">
-                      Requiere Acceso
+                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-sans">
+                      Sin Servidor Directo
                     </span>
                   )}
                 </div>
-                <p className="text-[10.5px] text-slate-700 leading-relaxed font-sans">
-                  {googleAuthToken ? (
-                    <>
-                      Los cambios también se guardarán automáticamente en la pestaña <strong>Equipos</strong>, <strong>Licencias</strong> y <strong>Dados de Baja</strong> del Excel compartido.
-                    </>
-                  ) : (
-                    <>
-                      Para guardar también en la hoja de cálculo de Google Sheets de repuesto, presiona el botón para iniciar sesión con Google antes de ingresar tu contraseña:
-                    </>
-                  )}
-                </p>
-                {!googleAuthToken && (
+
+                {serverSheetsStatus?.hasServiceAccount ? (
+                  <div className="space-y-2 text-[10.5px] text-slate-700">
+                    <p className="leading-relaxed">
+                      ¡Sincronización multi-dispositivo configurada! Los cambios se sincronizarán directamente en background al guardar, sin popups en ningún dispositivo.
+                    </p>
+                    <div className="p-2 border border-slate-200/60 bg-white/55 rounded-lg space-y-1 font-mono text-[9px] text-slate-600 break-all">
+                      <div className="flex justify-between gap-2 overflow-hidden text-ellipsis">
+                        <strong className="text-slate-500 uppercase">Correo de Servicio:</strong>
+                        <span className="text-slate-800 select-all font-semibold truncate max-w-[200px]">{serverSheetsStatus.clientEmail}</span>
+                      </div>
+                      <div className="flex justify-between gap-2 overflow-hidden text-ellipsis">
+                        <strong className="text-slate-500 uppercase">Libro ID:</strong>
+                        <span className="text-slate-800 select-all font-semibold truncate max-w-[200px]">{serverSheetsStatus.spreadsheetId}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <a
+                        href={serverSheetsStatus.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${serverSheetsStatus.spreadsheetId}/edit`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 bg-white hover:bg-emerald-55 text-emerald-800 border border-emerald-200/80 hover:border-emerald-300 font-extrabold text-[9px] py-1.5 px-2.5 rounded-lg uppercase tracking-wider transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                      >
+                        📂 Abrir Google Sheet
+                      </a>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          setIsSyncingToSheets(true);
+                          try {
+                            const response = await fetch(getApiUrl("/api/google-sheets/sync"), {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                database,
+                                componentTypes,
+                                areas,
+                                licenses,
+                                inventoryItems,
+                                decommissionedItems
+                              })
+                            });
+                            const data = await response.json();
+                            if (data.success) {
+                              alert("¡Sincronización manual forzada con éxito usando la Cuenta de Servicio del Servidor!");
+                            } else {
+                              throw new Error(data.message);
+                            }
+                          } catch (err: any) {
+                            alert("Falló la sincronización del servidor: " + (err?.message || String(err)));
+                          } finally {
+                            setIsSyncingToSheets(false);
+                          }
+                        }}
+                        disabled={isSyncingToSheets}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[9px] py-1.5 px-2.5 rounded-lg uppercase tracking-wider transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
+                      >
+                        ⚡ Sincronizar Ahora
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-[10.5px]">
+                    <p className="text-slate-700 leading-relaxed font-sans">
+                      Puedes vincular tu Google Sheets mediante popup de forma temporal (expira en 1 hora) o configurar la vinculación directa permanente para todos los dispositivos:
+                    </p>
+                    
+                    <div className="flex gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            const result = await loginWithGoogleSheets();
+                            if (result) {
+                              setGoogleAuthToken(result.token);
+                              setGoogleUser(result.user);
+                              localStorage.setItem("sia_google_auth_token", result.token);
+                              localStorage.setItem("sia_google_user", JSON.stringify(result.user));
+                              alert("¡Éxito! Google Sheets autorizado de modo temporal en este navegador.");
+                            }
+                          } catch (err) {
+                            alert("Error al conectar cuenta Google: " + (err instanceof Error ? err.message : String(err)));
+                          }
+                        }}
+                        className="flex-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 py-1.5 px-2 rounded-xl text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer font-sans"
+                      >
+                        Acceso Temporal (Popup)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* SERVER GOOGLE SHEETS SETUP DRAWER */}
+                <div className="border-t border-emerald-100/50 pt-2 bg-slate-100/30 -mx-4 -mb-4 p-4 rounded-b-2xl">
                   <button
                     type="button"
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      try {
-                        const result = await loginWithGoogleSheets();
-                        if (result) {
-                          setGoogleAuthToken(result.token);
-                          setGoogleUser(result.user);
-                          localStorage.setItem("sia_google_auth_token", result.token);
-                          localStorage.setItem("sia_google_user", JSON.stringify(result.user));
-                          alert("¡Éxito! Google Sheets autorizado. Al presionar Guardar, se actualizarán las pestañas en el Excel compartido.");
-                        }
-                      } catch (err) {
-                        console.error("Popup login error inside modal:", err);
-                        alert("No se pudo conectar con tu Google para Sheets. Asegúrate de permitir las ventanas emergentes (popups). Detalle: " + (err instanceof Error ? err.message : String(err)));
-                      }
-                    }}
-                    className="w-full bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 py-2 px-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs font-sans"
+                    onClick={() => setShowServerSheetsPanel(!showServerSheetsPanel)}
+                    className="w-full text-left text-[9px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-between py-1 transition-all"
                   >
-                    🔐 Autorizar y Vincular Google Sheets
+                    <span>⚙️ {serverSheetsStatus?.hasServiceAccount ? "Modificar" : "Configurar"} Vinculación Directa Permanente (Sin Popup)</span>
+                    <span className="font-mono text-xs">{showServerSheetsPanel ? "▲" : "▼"}</span>
                   </button>
-                )}
+                  
+                  {showServerSheetsPanel && (
+                    <div className="mt-2.5 text-[10px] space-y-3 bg-white p-3.5 rounded-xl border border-slate-200/70 text-slate-700 animate-in fade-in duration-150">
+                      <div className="p-2.5 rounded-lg bg-emerald-50 text-[9.5px] leading-relaxed space-y-1.5 text-emerald-950 border border-emerald-100">
+                        <p className="font-bold uppercase tracking-wider text-[8px] text-emerald-800">Instrucciones rápidas (3 pasos sencillos):</p>
+                        <ol className="list-decimal pl-3.5 space-y-1 font-sans">
+                          <li>Crea una <strong>Cuenta de Servicio</strong> en Google Cloud Console (IAM & administración).</li>
+                          <li>Crea una clave en formato <strong>JSON</strong> y descárgala.</li>
+                          <li>Abre tu hoja de cálculo compartida en tu cuenta de Google Drive y dale permisos de <strong>Editor</strong> al correo de tu cuenta de servicio.</li>
+                        </ol>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-black uppercase text-slate-400 font-mono block">
+                            ID del Spreadsheet de Google Sheets
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej: 13mt9-b_FJGWOqBqAYns6beFCMPRNlUwPBd-0zv-MfUA"
+                            value={serverSheetsIdInput}
+                            onChange={(e) => setServerSheetsIdInput(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-[9px] font-mono outline-none focus:bg-white focus:border-emerald-400 transition-all font-semibold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-black uppercase text-slate-400 font-mono block">
+                            URL del Spreadsheet (Para redirecciones en UI)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                            value={serverSheetsUrlInput}
+                            onChange={(e) => setServerSheetsUrlInput(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2.5 text-[9px] font-mono outline-none focus:bg-white focus:border-emerald-400 transition-all font-semibold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-black uppercase text-slate-400 font-mono block">
+                            Service Account JSON Key
+                          </label>
+                          <textarea
+                            placeholder='{"type": "service_account", "project_id": "...", "private_key": "-----BEGIN PRIVATE KEY-----...", "client_email": "..."}'
+                            value={serverSheetsSaInput}
+                            onChange={(e) => setServerSheetsSaInput(e.target.value)}
+                            className="w-full h-24 bg-slate-50 border border-slate-200 rounded-lg p-2 font-mono text-[8.5px] leading-relaxed outline-none focus:bg-white focus:border-emerald-400 transition-all font-semibold"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={isSavingServerSheetsConfig}
+                          onClick={async () => {
+                            if (!serverSheetsIdInput.trim()) {
+                              alert("Se requiere el ID del Spreadsheet.");
+                              return;
+                            }
+                            if (!serverSheetsSaInput.trim()) {
+                              alert("Se requiere el JSON de la Cuenta de Servicio.");
+                              return;
+                            }
+                            
+                            try {
+                              let parsed;
+                              try {
+                                parsed = JSON.parse(serverSheetsSaInput);
+                              } catch (jsonErr) {
+                                throw new Error("La clave ingresada no es un documento JSON válido.");
+                              }
+                              if (!parsed.client_email || !parsed.private_key) {
+                                throw new Error('El JSON debe contener los campos "client_email" y "private_key".');
+                              }
+                              
+                              setIsSavingServerSheetsConfig(true);
+                              
+                              const response = await fetch(getApiUrl("/api/google-sheets/config"), {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  spreadsheetId: serverSheetsIdInput,
+                                  spreadsheetUrl: serverSheetsUrlInput || `https://docs.google.com/spreadsheets/d/${serverSheetsIdInput}/edit`,
+                                  serviceAccountJson: serverSheetsSaInput
+                                })
+                              });
+                              
+                              const rData = await response.json();
+                              if (rData.success) {
+                                alert("¡Éxito! Cuenta de servicio registrada de forma permanente en el servidor. Intentando realizar una sincronización inicial...");
+                                
+                                // Call sync on server to populate right away
+                                fetch(getApiUrl("/api/google-sheets/sync"), {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    database,
+                                    componentTypes,
+                                    areas,
+                                    licenses,
+                                    inventoryItems,
+                                    decommissionedItems
+                                  })
+                                })
+                                .then(() => {
+                                  loadServerSheetsStatus();
+                                  setShowServerSheetsPanel(false);
+                                })
+                                .catch((e) => console.error("Initial sheets sync failed silently:", e));
+                              } else {
+                                throw new Error(rData.message);
+                              }
+                            } catch (e: any) {
+                              alert("Error al guardar credenciales en el servidor: " + e.message);
+                            } finally {
+                              setIsSavingServerSheetsConfig(false);
+                            }
+                          }}
+                          className="w-full bg-emerald-600 hover:bg-emerald-750 text-white font-extrabold text-[9px] py-2 px-2.5 rounded-lg uppercase tracking-wider transition-all cursor-pointer text-center disabled:opacity-50"
+                        >
+                          {isSavingServerSheetsConfig ? "Guardando credenciales..." : "Vincular y Sincronizar en Servidor"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Advanced Firebase Config for Unauthorized Vercel Domain error */}
                 <div className="border-t border-emerald-100/50 pt-2">
@@ -1867,7 +2094,7 @@ export default function App() {
                     onClick={() => setShowFirebaseConfigPanel(!showFirebaseConfigPanel)}
                     className="w-full text-left text-[9px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-between py-1 transition-all"
                   >
-                    <span>🛠️ ¿Error de dominio (unauthorized-domain)? Configuración de Firebase</span>
+                    <span>🛠️ ¿Aún usas Popups? Resolver Login temporal (Firebase Config)</span>
                     <span className="font-mono text-xs">{showFirebaseConfigPanel ? "▲" : "▼"}</span>
                   </button>
                   
