@@ -1442,40 +1442,20 @@ export default function App() {
                 {isSavingToCloud ? "Guardando..." : "Guardar Base de Datos"}
               </button>
 
-              <button
-                onClick={handleExportCSV}
-                className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              <a
+                href="https://docs.google.com/spreadsheets/d/1sU1noxH8yYVFw4E0b4aLWTVaqXByHWYMGySDbIIcdko/edit?gid=0#gid=0"
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 sm:flex-initial bg-emerald-700 hover:bg-emerald-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/15"
+                title="Abrir la hoja de cálculo de Google Sheets compartida directamente sin iniciar sesión"
               >
-                <FileSpreadsheet size={12} className="text-emerald-700" /> CSV
-              </button>
-
-              <div className="flex flex-1 sm:flex-initial gap-1">
-                <a
-                  href="https://docs.google.com/spreadsheets/d/1sU1noxH8yYVFw4E0b4aLWTVaqXByHWYMGySDbIIcdko/edit?gid=0#gid=0"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 bg-emerald-700 hover:bg-emerald-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/15"
-                  title="Abrir la hoja de cálculo de Google Sheets compartida directamente sin iniciar sesión"
-                >
-                  <FileSpreadsheet size={12} className="text-white" />
-                  🟢 Google Sheets / Excel
-                </a>
-                
-                <button
-                  onClick={() => handleConnectAndSyncGoogleSheets(false)}
-                  disabled={isSyncingToSheets}
-                  className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 px-3 py-2.5 rounded-xl font-extrabold text-[10px] transition-all flex items-center justify-center cursor-pointer shadow-xs disabled:opacity-60 shrink-0"
-                  title="Sincronizar datos actuales con Google Sheets (Requiere iniciar sesión con tu cuenta Editor)"
-                >
-                  <RefreshCw size={12} className={isSyncingToSheets ? "animate-spin text-emerald-600" : "text-emerald-700"} />
-                </button>
-              </div>
-
-
+                <FileSpreadsheet size={12} className="text-white" />
+                🟢 Google Sheets / Excel
+              </a>
 
               <button
                 onClick={() => generatePDFReport(database, componentTypes, licenses, inventoryItems)}
-                className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-600 text-white px-4.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10"
+                className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-650 text-white px-4.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10"
               >
                 <FileDown size={12} className="text-white" /> PDF
               </button>
@@ -1741,6 +1721,7 @@ export default function App() {
         licenses={licenses}
         inventoryItems={inventoryItems}
         auditLogs={auditLogs}
+        onExportCSV={handleExportCSV}
         onRestoreBackup={handleRestoreBackup}
       />
 

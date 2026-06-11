@@ -11,6 +11,7 @@ interface BackupModalProps {
   licenses: License[];
   inventoryItems: InventoryItem[];
   auditLogs: AuditLogEntry[];
+  onExportCSV?: () => void;
   onRestoreBackup: (backupData: {
     database: AppDatabase;
     componentTypes: ComponentType[];
@@ -30,6 +31,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   licenses,
   inventoryItems,
   auditLogs,
+  onExportCSV,
   onRestoreBackup,
 }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -250,22 +252,35 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           )}
 
           {/* EXPORT PANEL */}
-          <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl flex flex-col [@media(min-width:540px)]:flex-row [@media(min-width:540px)]:items-center justify-between gap-4">
+          <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-1 max-w-sm">
               <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
-                Descargar Respaldo Total
+                Descargar Respaldo o Reporte
               </h4>
               <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                Empaqueta y descarga todo el estado actual sistema: computadores, componentes, stock de almacén, áreas corporativas y bitácoras de cambios en un único archivo serializado.
+                Empaqueta y descarga todo el estado actual del sistema en un archivo de respaldo JSON, o exporta un reporte tabular en formato CSV de tus estaciones y puestos.
               </p>
             </div>
-            <button
-              onClick={handleExportBackup}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider px-5 py-3.5 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-            >
-              <Download size={13} className="text-slate-250" />
-              Guardar Copia JSON
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              {onExportCSV && (
+                <button
+                  onClick={onExportCSV}
+                  className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider px-4 py-3.5 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  title="Descargar listado de puestos y hardware como CSV"
+                >
+                  <FileText size={13} className="text-white" />
+                  Descargar CSV
+                </button>
+              )}
+              <button
+                onClick={handleExportBackup}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider px-4 py-3.5 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Descargar copia de seguridad con todos los datos locales serializados"
+              >
+                <Download size={13} className="text-slate-250" />
+                Guardar JSON
+              </button>
+            </div>
           </div>
 
           {/* IMPORT PANEL */}

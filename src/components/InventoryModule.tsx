@@ -54,6 +54,7 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
   const [decommissionCustomNotes, setDecommissionCustomNotes] = useState("");
   const [selectedCategoryInfo, setSelectedCategoryInfo] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>("all");
 
   const getFriendlyPuestoNameGlobal = (id: string, name?: string) => {
     if (name) return name;
@@ -534,6 +535,10 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                 </div>
               ) : (() => {
                 const filteredItems = items.filter((item) => {
+                  if (selectedClassFilter !== "all" && item.type !== selectedClassFilter) {
+                    return false;
+                  }
+
                   if (!searchTerm.trim()) return true;
 
                   const searchLower = searchTerm.toLowerCase();
@@ -556,27 +561,44 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
 
                 return (
                   <>
-                    {/* Buscador / Filtro */}
-                    <div className="mb-4 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                        <Search size={14} />
+                    {/* Buscador / Filtro con Clasificación */}
+                    <div className="flex flex-col sm:flex-row gap-2.5 mb-4">
+                      <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <Search size={14} />
+                        </div>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Buscar por nombre, clasificación o quien lo tiene asignado..."
+                          className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-red-500 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-slate-800 placeholder-slate-400 transition-all outline-none shadow-3xs"
+                        />
+                        {searchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchTerm("")}
+                            className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Buscar componente por nombre, tipo o persona asignada..."
-                        className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-red-500 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-slate-800 placeholder-slate-400 transition-all outline-none shadow-3xs"
-                      />
-                      {searchTerm && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchTerm("")}
-                          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+
+                      <div className="w-full sm:w-56">
+                        <select
+                          value={selectedClassFilter}
+                          onChange={(e) => setSelectedClassFilter(e.target.value)}
+                          className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-red-500 rounded-xl px-3 py-2.5 text-xs font-extrabold text-slate-700 transition-all outline-none cursor-pointer shadow-3xs"
                         >
-                          <X size={14} />
-                        </button>
-                      )}
+                          <option value="all">📁 Todas las Clasificaciones</option>
+                          {componentTypes.map((ct) => (
+                            <option key={ct.id} value={ct.id}>
+                              {ct.icon} {ct.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {filteredItems.length === 0 ? (
