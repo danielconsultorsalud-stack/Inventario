@@ -158,10 +158,10 @@ export default function App() {
   });
   const [isSyncingToSheets, setIsSyncingToSheets] = useState(false);
   const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState<string>(() => {
-    return localStorage.getItem("sia_google_sheet_id") || "1sU1noxH8yYVFw4E0b4aLWTVaqXByHWYMGySDbIIcdko";
+    return "13mt9-b_FJGWOqBqAYns6beFCMPRNlUwPBd-0zv-MfUA";
   });
   const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState<string>(() => {
-    return localStorage.getItem("sia_google_sheet_url") || "https://docs.google.com/spreadsheets/d/1sU1noxH8yYVFw4E0b4aLWTVaqXByHWYMGySDbIIcdko/edit?gid=0#gid=0";
+    return "https://docs.google.com/spreadsheets/d/13mt9-b_FJGWOqBqAYns6beFCMPRNlUwPBd-0zv-MfUA/edit?gid=0#gid=0";
   });
 
   const [isPostgresModalOpen, setIsPostgresModalOpen] = useState(false);
@@ -1484,7 +1484,7 @@ export default function App() {
               </button>
 
               <a
-                href="https://docs.google.com/spreadsheets/d/1sU1noxH8yYVFw4E0b4aLWTVaqXByHWYMGySDbIIcdko/edit?gid=0#gid=0"
+                href="https://docs.google.com/spreadsheets/d/13mt9-b_FJGWOqBqAYns6beFCMPRNlUwPBd-0zv-MfUA/edit?gid=0#gid=0"
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 sm:flex-initial bg-emerald-700 hover:bg-emerald-650 text-white px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/15"
@@ -1799,6 +1799,62 @@ export default function App() {
                   <strong>¡ATENCIÓN!</strong> Al proceder, <strong>se reemplazará por completo</strong> toda la información que esté guardada en la base de datos con los datos que ves en tu pantalla actualmente. Ningún dato remoto anterior podrá recuperarse.
                 </span>
               </p>
+
+              {/* Google Sheets Integration Status with direct button inside modal */}
+              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${googleAuthToken ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+                    <span className="font-extrabold text-[8px] uppercase tracking-wider text-slate-800">
+                      Google Sheets / Excel en línea
+                    </span>
+                  </div>
+                  {googleAuthToken ? (
+                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                      Sesión Activa ({googleUser?.email || "Google"})
+                    </span>
+                  ) : (
+                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-mono">
+                      Requiere Acceso
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10.5px] text-slate-700 leading-relaxed">
+                  {googleAuthToken ? (
+                    <>
+                      Los cambios también se guardarán automáticamente en la pestaña <strong>Equipos</strong>, <strong>Licencias</strong> y <strong>Dados de Baja</strong> del Excel compartido.
+                    </>
+                  ) : (
+                    <>
+                      Para guardar también en la hoja de cálculo de Google Sheets de repuesto, presiona el botón para iniciar sesión con Google antes de ingresar tu contraseña:
+                    </>
+                  )}
+                </p>
+                {!googleAuthToken && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const result = await loginWithGoogleSheets();
+                        if (result) {
+                          setGoogleAuthToken(result.token);
+                          setGoogleUser(result.user);
+                          localStorage.setItem("sia_google_auth_token", result.token);
+                          localStorage.setItem("sia_google_user", JSON.stringify(result.user));
+                          alert("¡Éxito! Google Sheets autorizado. Al presionar Guardar, se actualizarán las pestañas en el Excel compartido.");
+                        }
+                      } catch (err) {
+                        console.error("Popup login error inside modal:", err);
+                        alert("No se pudo conectar con tu Google para Sheets. Asegúrate de permitir las ventanas emergentes (popups). Detalle: " + (err instanceof Error ? err.message : String(err)));
+                      }
+                    }}
+                    className="w-full bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 py-2 px-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    🔐 Autorizar y Vincular Google Sheets
+                  </button>
+                )}
+              </div>
 
               {/* Password authorization form */}
               <div className="border-t border-slate-150 pt-4 space-y-1.5">
