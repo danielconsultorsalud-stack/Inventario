@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
 import firebaseConfig from "../../firebase-applet-config.json";
-import { AssetData, License } from "../types";
+import { AssetData, License, DecommissionedItem } from "../types";
 
 // Re-use the Firebase app configuration
 const app = initializeApp(firebaseConfig);
@@ -69,16 +69,117 @@ export const createInventorySpreadsheet = async (token: string, title?: string):
 };
 
 /**
- * Formats component lists for display
+ * Helper to ensure the spreadsheet has the correct worksheets: "Equipos", "Licencias", "Dados de Baja"
  */
-const formatComponent = (val: string | string[] | undefined): string => {
-  if (!val) return "";
-  if (Array.isArray(val)) return val.join(" | ");
-  return val;
+export const ensureSheetsExist = async (
+  token: string,
+  spreadsheetId: string
+): Promise<{
+  sheetIdEquipos: number;
+  sheetIdLicencias: number;
+  sheetIdBajas: number;
+}> => {
+  const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+  const getRes = await fetch(getUrl, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!getRes.ok) {
+    const txt = await getRes.text();
+    throw new Error(`No se pudo obtener la estructura de Google Sheets: ${txt}`);
+  }
+  const meta = await getRes.json();
+  const sheets: any[] = meta.sheets || [];
+  
+  let existingTitles = sheets.map(s => s.properties.title);
+  const requests: any[] = [];
+  
+  // Decide if we should rename standard Sheet1 or Hoja 1 to Equipos
+  let renameSheet1 = false;
+  const sheet1Obj = sheets.find(s => s.properties.title === "Sheet1" || s.properties.title === "Hoja 1" || s.properties.title === "Hoja1");
+  if (!existingTitles.includes("Equipos") && sheet1Obj) {
+    renameSheet1 = true;
+  }
+
+  if (renameSheet1 && sheet1Obj) {
+    requests.push({
+      updateSheetProperties: {
+        properties: {
+          sheetId: sheet1Obj.properties.sheetId,
+          title: "Equipos"
+        },
+        fields: "title"
+      }
+    });
+    existingTitles.push("Equipos");
+    existingTitles = existingTitles.filter(t => t !== sheet1Obj.properties.title);
+  } else if (!existingTitles.includes("Equipos")) {
+    requests.push({
+      addSheet: {
+        properties: {
+          title: "Equipos"
+        }
+      }
+    });
+  }
+
+  if (!existingTitles.includes("Licencias")) {
+    requests.push({
+      addSheet: {
+        properties: {
+          title: "Licencias"
+        }
+      }
+    });
+  }
+
+  if (!existingTitles.includes("Dados de Baja")) {
+    requests.push({
+      addSheet: {
+        properties: {
+          title: "Dados de Baja"
+        }
+      }
+    });
+  }
+
+  if (requests.length > 0) {
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    const updateRes = await fetch(updateUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ requests })
+    });
+    if (!updateRes.ok) {
+      console.warn("No se pudieron inicializar todas las pestañas de hojas:", await updateRes.text());
+    }
+
+    // Refresh to get any newly created sheetIds
+    const refreshRes = await fetch(getUrl, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (refreshRes.ok) {
+      const refreshedMeta = await refreshRes.json();
+      const updatedSheets: any[] = refreshedMeta.sheets || [];
+      return {
+        sheetIdEquipos: updatedSheets.find(s => s.properties.title === "Equipos")?.properties.sheetId ?? 0,
+        sheetIdLicencias: updatedSheets.find(s => s.properties.title === "Licencias")?.properties.sheetId ?? 0,
+        sheetIdBajas: updatedSheets.find(s => s.properties.title === "Dados de Baja")?.properties.sheetId ?? 0
+      };
+    }
+  }
+
+  return {
+    sheetIdEquipos: sheets.find(s => s.properties.title === "Equipos")?.properties.sheetId ?? sheets[0]?.properties.sheetId ?? 0,
+    sheetIdLicencias: sheets.find(s => s.properties.title === "Licencias")?.properties.sheetId ?? 0,
+    sheetIdBajas: sheets.find(s => s.properties.title === "Dados de Baja")?.properties.sheetId ?? 0
+  };
 };
 
 /**
- * Exports database to google sheets
+ * Exports database (Equipos), licenses (Licencias) and decommissioned items (Dados de Baja) to Google Sheets
  */
 export const syncDatabaseToGoogleSheet = async (
   token: string,
@@ -86,8 +187,12 @@ export const syncDatabaseToGoogleSheet = async (
   database: Record<string, AssetData>,
   licenses: License[],
   inventoryItems: any[],
-  componentTypes: any[]
+  componentTypes: any[],
+  decommissionedItems: DecommissionedItem[]
 ): Promise<void> => {
+  // Ensure all tabs exist and obtain their sheet IDs
+  const sheetIds = await ensureSheetsExist(token, spreadsheetId);
+
   const formatComponentSingle = (val: string): string => {
     if (!val || val === "Ninguno / Libre") return "Ninguno / Libre";
     const invItem = (inventoryItems || []).find((item: any) => item.id === val);
@@ -106,8 +211,8 @@ export const syncDatabaseToGoogleSheet = async (
     (t) => !["board", "video", "procesador", "ram", "almacenamiento", "monitor", "wifi", "mouse", "teclado", "camara", "auriculares"].includes(t.id)
   );
 
-  // Define layout/table headers
-  const headers = [
+  // 1. POPULATE CONTROLLER LIST: "Equipos"
+  const headersEquipos = [
     "ID PUESTO",
     "ÁREA / UBICACIÓN",
     "NOMBRE EQUIPO",
@@ -136,9 +241,8 @@ export const syncDatabaseToGoogleSheet = async (
     "COMENTARIOS / OBSERVACIONES"
   ];
 
-  const rows: string[][] = [headers];
+  const rowsEquipos: string[][] = [headersEquipos];
 
-  // Helper mapping IDs to location names for visual clarity
   const getFriendlyPuestoName = (id: string) => {
     if (id === "p-of-carlos") return "Oficina Carlos (Puesto Principal)";
     if (id === "p-it") return "Oficina Carlos (Mesa IT)";
@@ -156,7 +260,6 @@ export const syncDatabaseToGoogleSheet = async (
     return id;
   };
 
-  // Convert database assets to rows
   Object.entries(database).forEach(([puestoId, d]) => {
     if (!d || !d.nombre_equipo) return;
 
@@ -192,81 +295,159 @@ export const syncDatabaseToGoogleSheet = async (
       formatComponentRef(d.otros),
     ];
 
-    // Add custom dynamic categories
     customClasificaciones.forEach((cClass) => {
       const val = d[cClass.id];
       rowData.push(formatComponentRef(val as string));
     });
 
-    // Add licenses and observations
     rowData.push(licensesText);
     rowData.push(d.comentarios || "");
 
-    rows.push(rowData);
+    rowsEquipos.push(rowData);
   });
 
-  // Overwrite sheet values
-  // We targets 'Sheet1!A1' as standard default sheet range
-  const range = "Sheet1!A1";
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`;
+  // 2. POPULATE SOFTWARE LICENSES LIST: "Licencias"
+  const headersLicencias = [
+    "ID LICENCIA",
+    "SOTWARE / NOMBRE DE LICENCIA",
+    "CUPOS PERMITIDOS (LÍMITE)",
+    "CANTIDAD ASIGNADA (EN USO)",
+    "CUPOS DISPONIBLES",
+    "EQUIPOS ASIGNADOS"
+  ];
+  const rowsLicencias: string[][] = [headersLicencias];
 
-  const response = await fetch(url, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      values: rows,
-    }),
-  });
-
-  if (!response.ok) {
-    // If saving fails due to wrong sheet name, try with 'A1' directly (unnamed tab)
-    const fallbackUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1?valueInputOption=RAW`;
-    const fallbackResponse = await fetch(fallbackUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        values: rows,
-      }),
+  licenses.forEach((lic) => {
+    const assignedAssets: string[] = [];
+    Object.entries(database).forEach(([_, asset]) => {
+      if (!asset || !asset.nombre_equipo) return;
+      const licIds = asset.licencia_ids || (asset.licencia_id ? [asset.licencia_id] : []);
+      if (licIds.includes(lic.id)) {
+        assignedAssets.push(asset.nombre_equipo);
+      }
     });
 
-    if (!fallbackResponse.ok) {
-      const errText = await fallbackResponse.text();
-      throw new Error(`Error al guardar en la hoja de cálculo: ${errText}`);
-    }
-  }
+    const assignedCount = assignedAssets.length;
+    const available = lic.limit - assignedCount;
+    const assignedText = assignedAssets.join(" / ") || "Ningún equipo asignado";
 
-  // Enhance spreadsheet format (make header bold and color background slightly, auto-resize columns)
+    rowsLicencias.push([
+      lic.id,
+      lic.name,
+      String(lic.limit),
+      String(assignedCount),
+      String(available),
+      assignedText
+    ]);
+  });
+
+  // 3. POPULATE DECOMMISSIONED ITEMS LIST: "Dados de Baja"
+  const headersBajas = [
+    "ID DE REGISTRO",
+    "COMPONENTE",
+    "TIPO DE COMPONENTE",
+    "NÚMERO DE SERIE",
+    "CANTIDAD",
+    "MOTIVO DE LA BAJA",
+    "PUESTO DE ORIGEN",
+    "FECHA Y HORA DE BAJA"
+  ];
+  const rowsBajas: string[][] = [headersBajas];
+
+  (decommissionedItems || []).forEach((item) => {
+    rowsBajas.push([
+      item.id,
+      item.name || "Sin nombre",
+      item.type || "Desconocido",
+      item.serial || "S/N",
+      String(item.quantity || 1),
+      item.reason || "Sin especificar",
+      item.originalWorkstation || "Desconocido",
+      item.timestamp ? new Date(item.timestamp).toLocaleString("es-ES") : "Sin fecha"
+    ]);
+  });
+
+  // 4. BATCH CLEAR OLD WORKBOOK VALUES (avoids visual leftovers from previous runs that had more rows)
   try {
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`;
+    await fetch(clearUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ranges: [
+          "Equipos!A1:Z500",
+          "Licencias!A1:Z200",
+          "'Dados de Baja'!A1:Z1000"
+        ]
+      })
+    });
+  } catch (clearErr) {
+    console.warn("No se pudo limpiar los rangos anteriores, continuando con sobreescritura directa:", clearErr);
+  }
+
+  // 5. WRITE VALUES USING BATCHUPDATE
+  const batchWriteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
+  const writeResponse = await fetch(batchWriteUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      valueInputOption: "RAW",
+      data: [
+        {
+          range: "Equipos!A1",
+          values: rowsEquipos
+        },
+        {
+          range: "Licencias!A1",
+          values: rowsLicencias
+        },
+        {
+          range: "'Dados de Baja'!A1",
+          values: rowsBajas
+        }
+      ]
+    })
+  });
+
+  if (!writeResponse.ok) {
+    const errText = await writeResponse.text();
+    throw new Error(`Error escribiendo datos multidocumento en Sheets: ${errText}`);
+  }
+
+  // 6. BEAUTIFUL AUTO-FORMATS (Header background colors & bolds, and column resizing)
+  try {
+    const formatUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    await fetch(formatUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         requests: [
-          // Bold and styled header
+          // Styled Header for "Equipos" (Red Accent)
           {
             repeatCell: {
               range: {
+                sheetId: sheetIds.sheetIdEquipos,
                 startRowIndex: 0,
                 endRowIndex: 1,
                 startColumnIndex: 0,
-                endColumnIndex: headers.length
+                endColumnIndex: headersEquipos.length
               },
               cell: {
                 userEnteredFormat: {
-                  backgroundColor: { red: 0.85, green: 0.1, blue: 0.1 }, // red styled header matching the app!
+                  backgroundColor: { red: 0.1, green: 0.15, blue: 0.2 }, // Sleek dark slate
                   textFormat: {
                     bold: true,
                     foregroundColor: { red: 1.0, green: 1.0, blue: 1.0 },
-                    fontSize: 10
+                    fontSize: 9
                   },
                   horizontalAlignment: "CENTER"
                 }
@@ -274,21 +455,91 @@ export const syncDatabaseToGoogleSheet = async (
               fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
             }
           },
-          // Alternative auto-resize dimensions
+          // Styled Header for "Licencias" (Teal/Blue Accent)
+          {
+            repeatCell: {
+              range: {
+                sheetId: sheetIds.sheetIdLicencias,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: headersLicencias.length
+              },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.05, green: 0.25, blue: 0.2 }, // Dark pine green
+                  textFormat: {
+                    bold: true,
+                    foregroundColor: { red: 1.0, green: 1.0, blue: 1.0 },
+                    fontSize: 9
+                  },
+                  horizontalAlignment: "CENTER"
+                }
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+            }
+          },
+          // Styled Header for "Dados de Baja" (Bordeaux/Orange Dark Accent)
+          {
+            repeatCell: {
+              range: {
+                sheetId: sheetIds.sheetIdBajas,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: headersBajas.length
+              },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.35, green: 0.1, blue: 0.1 }, // Burgundy / crimson theme
+                  textFormat: {
+                    bold: true,
+                    foregroundColor: { red: 1.0, green: 1.0, blue: 1.0 },
+                    fontSize: 9
+                  },
+                  horizontalAlignment: "CENTER"
+                }
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+            }
+          },
+          // Auto-resize dimensions of headers for Equipos
           {
             autoResizeDimensions: {
               dimensions: {
-                sheetId: 0,
+                sheetId: sheetIds.sheetIdEquipos,
                 dimension: "COLUMNS",
                 startIndex: 0,
-                endIndex: headers.length
+                endIndex: headersEquipos.length
+              }
+            }
+          },
+          // Auto-resize dimensions of headers for Licencias
+          {
+            autoResizeDimensions: {
+              dimensions: {
+                sheetId: sheetIds.sheetIdLicencias,
+                dimension: "COLUMNS",
+                startIndex: 0,
+                endIndex: headersLicencias.length
+              }
+            }
+          },
+          // Auto-resize dimensions of headers for Bajas
+          {
+            autoResizeDimensions: {
+              dimensions: {
+                sheetId: sheetIds.sheetIdBajas,
+                dimension: "COLUMNS",
+                startIndex: 0,
+                endIndex: headersBajas.length
               }
             }
           }
         ]
-      }),
+      })
     });
   } catch (e) {
-    console.warn("No se pudo aplicar el auto-formato a las columnas, ignorando:", e);
+    console.warn("No se pudo aplicar el auto-formato estético a las columnas, ignorando:", e);
   }
 };
