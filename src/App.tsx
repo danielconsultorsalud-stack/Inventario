@@ -1758,61 +1758,6 @@ export default function App() {
                 </span>
               </p>
 
-              {/* Google Sheets Integration Status */}
-              <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/70 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="font-extrabold text-[9px] uppercase tracking-wider text-emerald-850">
-                      Google Sheets / Excel en línea
-                    </span>
-                  </div>
-                  {googleAuthToken ? (
-                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
-                      Conectado
-                    </span>
-                  ) : (
-                    <span className="text-[8px] font-extrabold uppercase tracking-wide text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      Solo Lectura
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-700 leading-normal">
-                  {googleAuthToken ? (
-                    <>
-                      Se actualizará automáticamente el Excel en línea en las pestañas <strong>Equipos</strong>, <strong>Licencias</strong> y <strong>Dados de Baja</strong> ({googleUser?.email || "Google"}).
-                    </>
-                  ) : (
-                    <>
-                      Los datos se guardarán en Postgres. Para actualizar también el Excel compartido de Google Sheets, vincula tu cuenta de Google antes de guardar:
-                    </>
-                  )}
-                </p>
-                {!googleAuthToken && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const result = await loginWithGoogleSheets();
-                        if (result) {
-                          setGoogleAuthToken(result.token);
-                          setGoogleUser(result.user);
-                          localStorage.setItem("sia_google_auth_token", result.token);
-                          localStorage.setItem("sia_google_user", JSON.stringify(result.user));
-                          alert("¡Éxito! Cuenta de Google vinculada. Las sincronizaciones de Excel se harán automáticamente al guardar en la base de datos.");
-                        }
-                      } catch (err) {
-                        console.error("Popup login error:", err);
-                        alert("No se pudo conectar con Google. Puedes guardar de todas formas.");
-                      }
-                    }}
-                    className="w-full mt-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 py-1.5 px-3 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    🔐 Vincular mi Cuenta de Google para Sheets
-                  </button>
-                )}
-              </div>
-
               {/* Password authorization form */}
               <div className="border-t border-slate-150 pt-4 space-y-1.5">
                 <label className="block text-[9px] font-extrabold uppercase tracking-widest text-slate-400 font-mono">
