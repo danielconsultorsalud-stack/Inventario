@@ -378,6 +378,25 @@ export default function App() {
       setAuditLogs(updatedLogs);
 
       let sheetsSyncMessage = "";
+      let token = googleAuthToken;
+      let userObj = googleUser;
+
+      // Ensure we have a active Google Sheet token if spreadsheet is connected
+      if (googleSpreadsheetId && !token) {
+        try {
+          const loginRes = await loginWithGoogleSheets();
+          if (loginRes) {
+            token = loginRes.token;
+            userObj = loginRes.user;
+            setGoogleAuthToken(token);
+            setGoogleUser(userObj);
+            localStorage.setItem("sia_google_auth_token", token);
+            localStorage.setItem("sia_google_user", JSON.stringify(userObj));
+          }
+        } catch (loginErr) {
+          console.error("Auto Google login during save failed:", loginErr);
+        }
+      }
 
       if (isStaticHosting) {
         if (!getConnectionString()) throw new Error("No hay una base de datos conectada. Configúrala en el Setup de Postgres.");
@@ -393,10 +412,10 @@ export default function App() {
         });
 
         // Background sync to Google Sheets if spreadsheet is connected and authorized
-        if (googleSpreadsheetId && googleAuthToken) {
+        if (googleSpreadsheetId && token) {
           try {
             await syncDatabaseToGoogleSheet(
-              googleAuthToken,
+              token,
               googleSpreadsheetId,
               database,
               licenses,
@@ -405,9 +424,18 @@ export default function App() {
               decommissionedItems
             );
             sheetsSyncMessage = " y Excel de Google Sheets actualizado correctamente.";
-          } catch (sheetsErr) {
+          } catch (sheetsErr: any) {
             console.error("Auto sheets sync during save failed:", sheetsErr);
-            sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión de Google expiró).";
+            const errMsg = sheetsErr?.message || String(sheetsErr);
+            if (errMsg.includes("401") || errMsg.includes("unauthorized") || errMsg.includes("token")) {
+              setGoogleAuthToken("");
+              setGoogleUser(null);
+              localStorage.removeItem("sia_google_auth_token");
+              localStorage.removeItem("sia_google_user");
+              sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión expiró. Por favor reintenta y acepta el inicio de sesión).";
+            } else {
+              sheetsSyncMessage = ` (Error al actualizar Google Sheets: ${errMsg})`;
+            }
           }
         }
 
@@ -438,10 +466,10 @@ export default function App() {
       }
 
       // Background sync to Google Sheets if spreadsheet is connected and authorized
-      if (googleSpreadsheetId && googleAuthToken) {
+      if (googleSpreadsheetId && token) {
         try {
           await syncDatabaseToGoogleSheet(
-            googleAuthToken,
+            token,
             googleSpreadsheetId,
             database,
             licenses,
@@ -450,9 +478,18 @@ export default function App() {
             decommissionedItems
           );
           sheetsSyncMessage = " y Excel de Google Sheets actualizado correctamente.";
-        } catch (sheetsErr) {
+        } catch (sheetsErr: any) {
           console.error("Auto sheets sync during save failed:", sheetsErr);
-          sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión de Google expiró).";
+          const errMsg = sheetsErr?.message || String(sheetsErr);
+          if (errMsg.includes("401") || errMsg.includes("unauthorized") || errMsg.includes("token")) {
+            setGoogleAuthToken("");
+            setGoogleUser(null);
+            localStorage.removeItem("sia_google_auth_token");
+            localStorage.removeItem("sia_google_user");
+            sheetsSyncMessage = " (Google Sheets no se actualizó porque la sesión expiró. Por favor reintenta y acepta el inicio de sesión).";
+          } else {
+            sheetsSyncMessage = ` (Error al actualizar Google Sheets: ${errMsg})`;
+          }
         }
       }
       
@@ -824,12 +861,16 @@ export default function App() {
     licenses: License[];
     inventoryItems: InventoryItem[];
     auditLogs: AuditLogEntry[];
+    decommissionedItems?: any[];
   }) => {
     setDatabase(backupData.database);
     setComponentTypes(backupData.componentTypes);
     setAreas(backupData.areas);
     setLicenses(backupData.licenses);
     setInventoryItems(backupData.inventoryItems);
+    if (backupData.decommissionedItems) {
+      setDecommissionedItems(backupData.decommissionedItems);
+    }
     
     const restoreEvent: AuditLogEntry = {
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1721,6 +1762,7 @@ export default function App() {
         licenses={licenses}
         inventoryItems={inventoryItems}
         auditLogs={auditLogs}
+        decommissionedItems={decommissionedItems}
         onExportCSV={handleExportCSV}
         onRestoreBackup={handleRestoreBackup}
       />

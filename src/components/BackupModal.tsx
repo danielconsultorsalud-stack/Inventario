@@ -11,6 +11,7 @@ interface BackupModalProps {
   licenses: License[];
   inventoryItems: InventoryItem[];
   auditLogs: AuditLogEntry[];
+  decommissionedItems: any[];
   onExportCSV?: () => void;
   onRestoreBackup: (backupData: {
     database: AppDatabase;
@@ -19,6 +20,7 @@ interface BackupModalProps {
     licenses: License[];
     inventoryItems: InventoryItem[];
     auditLogs: AuditLogEntry[];
+    decommissionedItems: any[];
   }) => void;
 }
 
@@ -31,6 +33,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   licenses,
   inventoryItems,
   auditLogs,
+  decommissionedItems,
   onExportCSV,
   onRestoreBackup,
 }) => {
@@ -42,6 +45,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     licenses?: License[];
     inventoryItems?: InventoryItem[];
     auditLogs?: AuditLogEntry[];
+    decommissionedItems?: any[];
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -61,6 +65,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         licenses,
         inventoryItems,
         auditLogs,
+        decommissionedItems,
       };
 
       const jsonStr = JSON.stringify(backupPayload, null, 2);
@@ -134,6 +139,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           licenses: parsed.licenses || [],
           inventoryItems: parsed.inventoryItems || [],
           auditLogs: parsed.auditLogs || [],
+          decommissionedItems: parsed.decommissionedItems || [],
         });
       } catch (err: any) {
         setErrorMsg(err?.message || "No se pudo interpretar el archivo JSON.");
@@ -184,6 +190,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         licenses: parsedData.licenses && parsedData.licenses.length > 0 ? parsedData.licenses : licenses,
         inventoryItems: parsedData.inventoryItems && parsedData.inventoryItems.length > 0 ? parsedData.inventoryItems : inventoryItems,
         auditLogs: parsedData.auditLogs && parsedData.auditLogs.length > 0 ? parsedData.auditLogs : [],
+        decommissionedItems: parsedData.decommissionedItems && parsedData.decommissionedItems.length > 0 ? parsedData.decommissionedItems : decommissionedItems,
       });
 
       setSuccessMsg("¡Toda la información se ha restaurado con éxito desde la copia de seguridad!");
