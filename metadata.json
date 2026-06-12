@@ -1,5 +1,5 @@
 {
-  "name": "SIA Cloud",
+  "name": "Inventario Consultorsalud",
   "description": "Gestión visual e interactiva de activos de TI y puestos de trabajo para ConsultorSalud",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
