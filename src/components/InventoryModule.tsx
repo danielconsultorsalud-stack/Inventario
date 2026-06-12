@@ -58,17 +58,30 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
 
   const getFriendlyPuestoNameGlobal = (id: string, name?: string) => {
     if (name) return name;
-    if (id === "p-of-carlos") return "Oficina Carlos (Puesto Principal)";
-    if (id === "p-it") return "Oficina Carlos (Mesa IT)";
-    if (id === "p-juntas") return "Sala de Juntas";
-    if (id === "p-gerencia") return "Oficina Gerencia";
+    
+    const config = (database && (database["_workspace_config"] as any)) || {};
+    const oficinaCarlosVal = config.oficinaCarlos || "Oficina Carlos";
+    const pCarlosMainVal = config.pCarlosMain || "Puesto Principal";
+    const pCarlosItVal = config.pCarlosIt || "IT";
+    const salaJuntasVal = config.salaJuntas || "Sala de Juntas";
+    const oficinaGerenciaVal = config.oficinaGerencia || "Oficina Gerencia";
+    const mesaAVal = config.mesaA || "Mesa A";
+    const mesaBVal = config.mesaB || "Mesa B";
+    const mesaCVal = config.mesaC || "Mesa C";
+    const mesaDVal = config.mesaD || "Mesa D";
+
+    if (id === "p-of-carlos") return `${oficinaCarlosVal} (${pCarlosMainVal})`;
+    if (id === "p-it") return `${oficinaCarlosVal} (${pCarlosItVal})`;
+    if (id === "p-juntas") return salaJuntasVal;
+    if (id === "p-gerencia") return oficinaGerenciaVal;
     if (id.startsWith("p-")) {
       const num = id.split("-")[1];
       let location = "Mesa Común";
       const pNum = Number(num);
-      if (pNum >= 1 && pNum <= 4) location = "Mesa A";
-      else if (pNum >= 5 && pNum <= 10) location = "Mesa B";
-      else if (pNum >= 11 && pNum <= 16) location = "Mesa C";
+      if (pNum >= 1 && pNum <= 4) location = mesaAVal;
+      else if (pNum >= 5 && pNum <= 10) location = mesaBVal;
+      else if (pNum >= 11 && pNum <= 16) location = mesaCVal;
+      else if (pNum >= 17 && pNum <= 19) location = mesaDVal;
       else location = "Fila Principal";
       return `Puesto ${num} (${location})`;
     }
