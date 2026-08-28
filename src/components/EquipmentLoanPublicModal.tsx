@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { X, CheckCircle, Package, User, Calendar, FileText, ArrowRight, Printer, AlertTriangle, Building2, Tag, ShieldCheck } from "lucide-react";
+import { X, CheckCircle, Package, User, Calendar, FileText, ArrowRight, Printer, AlertTriangle, Building2, Tag, ShieldCheck, FileDown } from "lucide-react";
 import { InventoryItem, ComponentType, Area, Database, AssetData, EquipmentLoan } from "../types";
+import { generateSingleLoanVoucherPDF } from "../utils/pdfGenerator";
 
 interface EquipmentLoanPublicModalProps {
   isOpen: boolean;
@@ -8,8 +9,9 @@ interface EquipmentLoanPublicModalProps {
   inventoryItems: InventoryItem[];
   componentTypes: ComponentType[];
   areas: Area[];
-  database: Database;
-  onSubmitLoan: (loan: Omit<EquipmentLoan, "id" | "checkoutDate" | "status">) => Promise<EquipmentLoan | null>;
+  database?: Database;
+  knownEmployees?: string[];
+  onSubmitLoan: (loan: Omit<EquipmentLoan, "id" | "checkoutDate" | "status">) => Promise<EquipmentLoan | null> | EquipmentLoan | null;
 }
 
 export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> = ({
@@ -18,7 +20,8 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
   inventoryItems,
   componentTypes,
   areas,
-  database,
+  database = {},
+  knownEmployees: propKnownEmployees = [],
   onSubmitLoan,
 }) => {
   // Mode selection: from inventory or custom
@@ -44,20 +47,50 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
 
   if (!isOpen) return null;
 
-  // Extract list of known employees from workstations database
-  const knownEmployees: { name: string; area?: string }[] = [];
-  const nameSet = new Set<string>();
+  // Extract list of registered employees from workstations database and/or provided prop
+  interface KnownEmployee {
+    name: string;
+    area?: string;
+    deskName?: string;
+    deskId?: string;
+  }
 
-  Object.values(database).forEach((rawDesk) => {
-    const desk = rawDesk as AssetData;
-    if (desk && desk.asignado_a && desk.asignado_a.trim()) {
-      const trimmed = desk.asignado_a.trim();
-      if (!nameSet.has(trimmed.toLowerCase())) {
-        nameSet.add(trimmed.toLowerCase());
-        knownEmployees.push({ name: trimmed, area: desk.area_select });
+  const knownEmployeesMap = new Map<string, KnownEmployee>();
+
+  if (database && typeof database === "object") {
+    Object.entries(database).forEach(([deskId, rawDesk]) => {
+      if (deskId === "_workspace_config") return;
+      const desk = rawDesk as AssetData;
+      if (desk && desk.asignado_a && desk.asignado_a.trim()) {
+        const trimmed = desk.asignado_a.trim();
+        const key = trimmed.toLowerCase();
+        if (!knownEmployeesMap.has(key)) {
+          knownEmployeesMap.set(key, {
+            name: trimmed,
+            area: desk.area_select || undefined,
+            deskName: desk.nombre_equipo || undefined,
+            deskId,
+          });
+        }
       }
-    }
-  });
+    });
+  }
+
+  if (Array.isArray(propKnownEmployees)) {
+    propKnownEmployees.forEach((emp) => {
+      if (typeof emp === "string" && emp.trim()) {
+        const trimmed = emp.trim();
+        const key = trimmed.toLowerCase();
+        if (!knownEmployeesMap.has(key)) {
+          knownEmployeesMap.set(key, { name: trimmed });
+        }
+      }
+    });
+  }
+
+  const knownEmployeesList: KnownEmployee[] = Array.from(knownEmployeesMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, "es", { sensitivity: "base" })
+  );
 
   // Available inventory items (quantity > 0)
   const availableInventoryItems = inventoryItems.filter((i) => i.quantity > 0);
@@ -78,18 +111,22 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
 
   const handleSelectEmployee = (name: string) => {
     setRequesterName(name);
-    const match = knownEmployees.find((e) => e.name.toLowerCase() === name.toLowerCase());
+    const match = knownEmployeesList.find((e) => e.name.toLowerCase() === name.toLowerCase());
     if (match && match.area) {
       setSelectedArea(match.area);
     }
   };
+
+  const selectedEmployeeInfo = knownEmployeesList.find(
+    (e) => e.name.toLowerCase() === requesterName.trim().toLowerCase()
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
     if (!requesterName.trim()) {
-      setErrorMessage("Por favor ingresa el nombre de la persona a quien se asigna/presta el equipo.");
+      setErrorMessage("Por favor selecciona un colaborador registrado en los equipos.");
       return;
     }
 
@@ -300,13 +337,22 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handlePrintReceipt}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-5 py-3 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  <Printer size={15} /> Imprimir / Guardar Acta
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => generateSingleLoanVoucherPDF(completedLoan, componentTypes)}
+                    className="bg-red-700 hover:bg-red-650 text-white font-extrabold text-xs px-5 py-3 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-red-700/20"
+                  >
+                    <FileDown size={15} /> Descargar Acta PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrintReceipt}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-5 py-3 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <Printer size={15} /> Imprimir
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-2">
                   <button
@@ -319,7 +365,7 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
                   <button
                     type="button"
                     onClick={onClose}
-                    className="bg-red-700 hover:bg-red-650 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all cursor-pointer shadow-sm"
+                    className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all cursor-pointer shadow-sm"
                   >
                     Entendido / Cerrar
                   </button>
@@ -340,40 +386,38 @@ export const EquipmentLoanPublicModal: React.FC<EquipmentLoanPublicModalProps> =
               <div className="space-y-3">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                   <User size={13} className="text-red-700" />
-                  1. Persona Asignada / Solicitante *
+                  1. Persona Asignada / Colaborador Registrado *
                 </label>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <input
-                      type="text"
-                      required
-                      value={requesterName}
-                      onChange={(e) => setRequesterName(e.target.value)}
-                      placeholder="Nombre y Apellidos..."
-                      list="known-employees-list"
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-red-500 transition-all outline-none"
-                    />
-                    <datalist id="known-employees-list">
-                      {knownEmployees.map((emp, idx) => (
-                        <option key={idx} value={emp.name}>
-                          {emp.area ? `${emp.name} (${emp.area})` : emp.name}
-                        </option>
-                      ))}
-                    </datalist>
-                    {knownEmployees.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        <span className="text-[9px] text-slate-400 font-medium">Sugeridos:</span>
-                        {knownEmployees.slice(0, 4).map((emp, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => handleSelectEmployee(emp.name)}
-                            className="text-[9px] bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer"
-                          >
-                            {emp.name}
-                          </button>
+                    {knownEmployeesList.length > 0 ? (
+                      <select
+                        required
+                        value={requesterName}
+                        onChange={(e) => handleSelectEmployee(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-red-500 transition-all outline-none cursor-pointer"
+                      >
+                        <option value="">-- Selecciona un Colaborador Asignado --</option>
+                        {knownEmployeesList.map((emp, idx) => (
+                          <option key={idx} value={emp.name}>
+                            {emp.name} {emp.area ? `[${emp.area}]` : ""} {emp.deskName ? `• ${emp.deskName}` : ""}
+                          </option>
                         ))}
+                      </select>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium">
+                        ⚠️ No hay colaboradores asignados en los equipos del mapa. Asigna puestos primero para seleccionarlos aquí.
+                      </div>
+                    )}
+
+                    {selectedEmployeeInfo && (
+                      <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-red-50/70 border border-red-100 rounded-lg text-[10px] text-red-950 font-bold">
+                        <User size={12} className="text-red-700 shrink-0" />
+                        <span>Colaborador: {selectedEmployeeInfo.name}</span>
+                        {selectedEmployeeInfo.deskName && (
+                          <span className="text-slate-500 font-normal">({selectedEmployeeInfo.deskName})</span>
+                        )}
                       </div>
                     )}
                   </div>

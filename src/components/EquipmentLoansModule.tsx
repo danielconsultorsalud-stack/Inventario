@@ -18,9 +18,11 @@ import {
   X,
   ArrowUpRight,
   ShieldCheck,
-  Check
+  Check,
+  FileDown
 } from "lucide-react";
 import { EquipmentLoan, InventoryItem, ComponentType } from "../types";
+import { generateEquipmentLoansPDFReport, generateSingleLoanVoucherPDF } from "../utils/pdfGenerator";
 
 interface EquipmentLoansModuleProps {
   loans: EquipmentLoan[];
@@ -124,7 +126,25 @@ export const EquipmentLoansModule: React.FC<EquipmentLoansModuleProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const filterLabel =
+                statusFilter === "prestado"
+                  ? "En Préstamo (Activos)"
+                  : statusFilter === "devuelto"
+                  ? "Devueltos / Entregados"
+                  : statusFilter === "vencido"
+                  ? "Préstamos Vencidos"
+                  : undefined;
+              generateEquipmentLoansPDFReport(filteredLoans, componentTypes, filterLabel);
+            }}
+            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+            title="Descargar reporte en formato PDF de préstamos y salidas"
+          >
+            <FileDown size={14} className="text-red-700" /> Exportar PDF
+          </button>
           <button
             type="button"
             onClick={onOpenNewLoanModal}
@@ -439,6 +459,15 @@ export const EquipmentLoansModule: React.FC<EquipmentLoansModuleProps> = ({
 
                             <button
                               type="button"
+                              onClick={() => generateSingleLoanVoucherPDF(loan, componentTypes)}
+                              className="text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 border border-red-100 p-1.5 rounded-lg transition-all cursor-pointer"
+                              title="Descargar Acta / Comprobante en PDF"
+                            >
+                              <FileDown size={14} />
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => setSelectedVoucherLoan(loan)}
                               className="text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 p-1.5 rounded-lg transition-all cursor-pointer"
                               title="Ver / Imprimir Acta de Salida"
@@ -654,14 +683,23 @@ export const EquipmentLoansModule: React.FC<EquipmentLoansModuleProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={handlePrintVoucher}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md"
-              >
-                <Printer size={15} /> Imprimir Acta
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => generateSingleLoanVoucherPDF(selectedVoucherLoan, componentTypes)}
+                  className="bg-red-700 hover:bg-red-650 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-red-700/20"
+                >
+                  <FileDown size={15} /> Descargar Acta PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintVoucher}
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Printer size={15} /> Imprimir
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedVoucherLoan(null)}

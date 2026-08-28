@@ -1391,6 +1391,7 @@ export default function App() {
           inventoryItems={inventoryItems}
           componentTypes={componentTypes}
           areas={areas}
+          database={database}
           knownEmployees={knownEmployees}
           onSubmitLoan={handleCreateEquipmentLoan}
         />
@@ -1842,6 +1843,7 @@ export default function App() {
         inventoryItems={inventoryItems}
         componentTypes={componentTypes}
         areas={areas}
+        database={database}
         knownEmployees={knownEmployees}
         onSubmitLoan={handleCreateEquipmentLoan}
       />

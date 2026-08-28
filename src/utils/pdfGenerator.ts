@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { Database, ComponentType, License, InventoryItem, AssetData } from "../types";
+import { Database, ComponentType, License, InventoryItem, AssetData, EquipmentLoan } from "../types";
 
 // Helper function to count assignments in all workstations
 const getActiveAssignmentsCount = (itemId: string, database: Database): number => {
@@ -450,3 +450,524 @@ export const generatePDFReport = (
   // Save the constructed PDF document
   doc.save(`Reporte_Auditoria_IT_SIA_${new Date().toISOString().split("T")[0]}.pdf`);
 };
+
+/**
+ * Generates a comprehensive PDF report of all or filtered equipment loans
+ */
+export const generateEquipmentLoansPDFReport = (
+  loans: EquipmentLoan[],
+  componentTypes: ComponentType[],
+  filterTitle?: string
+) => {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 15;
+  let cursorY = 20;
+
+  const addHeaderDecoration = (pageNumber: number) => {
+    // Red Accent Bar
+    doc.setFillColor(164, 0, 0); // brand red #a40000
+    doc.rect(0, 0, pageWidth, 5, "F");
+
+    // Top Right Brand Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("SIA CLOUD — CONSULTORSALUD IT", pageWidth - marginX, 12, { align: "right" });
+
+    // Footer decoration line
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, pageHeight - 15, pageWidth - marginX, pageHeight - 15);
+
+    // Footer text
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Generado el ${new Date().toLocaleString("es-CO")}  |  Página ${pageNumber}`,
+      marginX,
+      pageHeight - 10
+    );
+  };
+
+  const checkPageOverflow = (neededHeight: number) => {
+    if (cursorY + neededHeight > pageHeight - 20) {
+      doc.addPage();
+      const nextPageNum = (doc as any).internal.getNumberOfPages();
+      addHeaderDecoration(nextPageNum);
+      cursorY = 24;
+    }
+  };
+
+  // 1. First Page Header
+  addHeaderDecoration(1);
+
+  // Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(30, 41, 59); // deep slate
+  doc.text("REPORTE DE CONTROL DE SALIDAS Y PRÉSTAMOS DE EQUIPOS", marginX, cursorY);
+  cursorY += 6;
+
+  // Subtitle
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(164, 0, 0);
+  doc.text(
+    filterTitle ? `HISTORIAL TI — FILTRO: ${filterTitle.toUpperCase()}` : "HISTORIAL COMPLETO DE PRÉSTAMOS Y SALIDAS DE HARDWARE",
+    marginX,
+    cursorY
+  );
+  cursorY += 10;
+
+  // Metrics Box
+  const todayStr = new Date().toISOString().split("T")[0];
+  const totalCount = loans.length;
+  const activeCount = loans.filter((l) => l.status === "prestado").length;
+  const returnedCount = loans.filter((l) => l.status === "devuelto").length;
+  const overdueCount = loans.filter(
+    (l) => l.status === "prestado" && l.expectedReturnDate && l.expectedReturnDate < todayStr
+  ).length;
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 26, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("RESUMEN GENERAL DEL ESTADO DE SALIDAS:", marginX + 5, cursorY + 6);
+
+  const colW = (pageWidth - 2 * marginX - 10) / 4;
+  const stats = [
+    { label: "Total Registros", value: `${totalCount}` },
+    { label: "En Préstamo (Activos)", value: `${activeCount}` },
+    { label: "Ya Entregados", value: `${returnedCount}` },
+    { label: "Vencidos / Fuera Fecha", value: `${overdueCount}` },
+  ];
+
+  stats.forEach((stat, i) => {
+    const boxX = marginX + 5 + i * colW;
+    const boxY = cursorY + 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(stat.label, boxX, boxY);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    if (i === 1) doc.setTextColor(217, 119, 6); // amber
+    else if (i === 2) doc.setTextColor(16, 185, 129); // emerald
+    else if (i === 3 && overdueCount > 0) doc.setTextColor(225, 29, 72); // rose
+    else doc.setTextColor(30, 41, 59);
+
+    doc.text(stat.value, boxX, boxY + 6);
+  });
+
+  cursorY += 34;
+
+  // Section Header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`REGISTROS DETALLADOS (${loans.length} EQUIPO${loans.length === 1 ? "" : "S"})`, marginX, cursorY);
+  cursorY += 6;
+
+  if (loans.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text("No se encontraron registros de salidas o préstamos con los criterios seleccionados.", marginX, cursorY + 4);
+    cursorY += 15;
+  } else {
+    loans.forEach((loan, index) => {
+      const isOverdue =
+        loan.status === "prestado" &&
+        loan.expectedReturnDate &&
+        loan.expectedReturnDate < todayStr;
+      
+      const compType = componentTypes.find((c) => c.id === loan.itemType);
+      const compTypeName = compType ? compType.name : loan.itemType;
+
+      // Estimate card height
+      const cardHeight = loan.notes || loan.returnNotes ? 36 : 30;
+      checkPageOverflow(cardHeight + 4);
+
+      // Card Box
+      doc.setFillColor(255, 255, 255);
+      if (loan.status === "devuelto") {
+        doc.setDrawColor(209, 250, 229); // light emerald border
+      } else if (isOverdue) {
+        doc.setDrawColor(254, 205, 211); // light rose border
+      } else {
+        doc.setDrawColor(254, 243, 199); // light amber border
+      }
+      doc.setLineWidth(0.4);
+      doc.rect(marginX, cursorY, pageWidth - 2 * marginX, cardHeight, "FD");
+
+      // Left Accent Color Strip
+      if (loan.status === "devuelto") {
+        doc.setFillColor(16, 185, 129); // emerald
+      } else if (isOverdue) {
+        doc.setFillColor(225, 29, 72); // rose
+      } else {
+        doc.setFillColor(245, 158, 11); // amber
+      }
+      doc.rect(marginX, cursorY, 3.5, cardHeight, "F");
+
+      // Top Line: Person & Status Badge
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42); // slate 900
+      const personText = `${index + 1}.  ${loan.requesterName}${loan.area ? `  —  [${loan.area}]` : ""}`;
+      doc.text(personText, marginX + 6, cursorY + 6);
+
+      // Status text on right
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      if (loan.status === "devuelto") {
+        doc.setTextColor(5, 150, 105);
+        doc.text("ENTREGADO / DEVUELTO", pageWidth - marginX - 4, cursorY + 6, { align: "right" });
+      } else if (isOverdue) {
+        doc.setTextColor(225, 29, 72);
+        doc.text("VENCIDO (FUERA DE PLAZO)", pageWidth - marginX - 4, cursorY + 6, { align: "right" });
+      } else {
+        doc.setTextColor(217, 119, 6);
+        doc.text("EN PRÉSTAMO ACTIVO", pageWidth - marginX - 4, cursorY + 6, { align: "right" });
+      }
+
+      // Line 2: Equipment details
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 41, 59);
+      const equipText = `Equipo:  ${loan.quantity}x ${loan.itemName}  (${compTypeName})${loan.serial ? `  |  S/N: ${loan.serial}` : ""}`;
+      doc.text(equipText, marginX + 6, cursorY + 12);
+
+      // Line 3: Purpose & Destination
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      const purposeText = `Motivo: ${loan.purpose}${loan.destination ? `  |  Destino: ${loan.destination}` : ""}`;
+      doc.text(purposeText, marginX + 6, cursorY + 17);
+
+      // Line 4: Dates
+      const checkoutStr = new Date(loan.checkoutDate).toLocaleDateString("es-CO", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      let datesText = `Fecha de Salida: ${checkoutStr}`;
+      if (loan.expectedReturnDate) {
+        datesText += `  |  Devolución Estimada: ${loan.expectedReturnDate}`;
+      }
+      if (loan.returnedDate) {
+        const retStr = new Date(loan.returnedDate).toLocaleDateString("es-CO", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+        datesText += `  |  Devuelto el: ${retStr}`;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(datesText, marginX + 6, cursorY + 22);
+
+      // Line 5 (Optional): Notes
+      if (loan.notes || loan.returnNotes) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        const noteContent = loan.returnNotes
+          ? `Devolución: "${loan.returnNotes}"`
+          : `Nota de salida: "${loan.notes}"`;
+        const splitNote = doc.splitTextToSize(noteContent, pageWidth - 2 * marginX - 12);
+        doc.text(splitNote, marginX + 6, cursorY + 28);
+      }
+
+      cursorY += cardHeight + 4;
+    });
+  }
+
+  // Signatures section
+  checkPageOverflow(40);
+  cursorY += 8;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("FIRMAS Y CONSTANCIA DE AUDITORÍA TI:", marginX, cursorY);
+  cursorY += 16;
+
+  const sigWidth = (pageWidth - 2 * marginX - 20) / 2;
+
+  // Signature 1: TI
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.4);
+  doc.line(marginX, cursorY, marginX + sigWidth, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Responsable de Inventario y Soporte TI", marginX + sigWidth / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Consultorsalud TI", marginX + sigWidth / 2, cursorY + 8, { align: "center" });
+
+  // Signature 2: Auditor / Jefe
+  doc.line(pageWidth - marginX - sigWidth, cursorY, pageWidth - marginX, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Dirección Administrativa / Operaciones", pageWidth - marginX - sigWidth / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Firma de Aprobación", pageWidth - marginX - sigWidth / 2, cursorY + 8, { align: "center" });
+
+  // Save PDF
+  doc.save(`Reporte_Prestamos_Equipos_SIA_${todayStr}.pdf`);
+};
+
+/**
+ * Generates an official single-page voucher/receipt PDF for a specific equipment loan
+ */
+export const generateSingleLoanVoucherPDF = (
+  loan: EquipmentLoan,
+  componentTypes: ComponentType[]
+) => {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 18;
+  let cursorY = 20;
+
+  // Header Bar
+  doc.setFillColor(164, 0, 0); // brand red
+  doc.rect(0, 0, pageWidth, 6, "F");
+
+  // Top header text
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text("CONSULTORSALUD TI — DEPARTAMENTO DE TECNOLOGÍA", marginX, 14);
+  doc.text(`FOLIO: #${loan.id.toUpperCase()}`, pageWidth - marginX, 14, { align: "right" });
+
+  // Title
+  cursorY = 26;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42);
+  doc.text("ACTA DE SALIDA Y PRÉSTAMO DE EQUIPO", marginX, cursorY);
+  cursorY += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Constancia oficial de entrega temporal de hardware y componentes de tecnología", marginX, cursorY);
+  cursorY += 12;
+
+  // Status block
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 18, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("ESTADO DEL PRÉSTAMO:", marginX + 6, cursorY + 7);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  if (loan.status === "devuelto") {
+    doc.setTextColor(16, 185, 129);
+    doc.text("EQUIPO YA ENTREGADO / DEVUELTO AL INVENTARIO", marginX + 6, cursorY + 13);
+  } else {
+    doc.setTextColor(217, 119, 6);
+    doc.text("EN PRÉSTAMO ACTIVO / PENDIENTE DE RETORNO", marginX + 6, cursorY + 13);
+  }
+
+  cursorY += 25;
+
+  // Section 1: Beneficiary Information
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(164, 0, 0);
+  doc.text("1. DATOS DEL COLABORADOR ASIGNADO", marginX, cursorY);
+  cursorY += 5;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 22, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Nombre Completo:", marginX + 6, cursorY + 7);
+  doc.text("Área / Departamento:", marginX + (pageWidth - 2 * marginX) / 2, cursorY + 7);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(loan.requesterName, marginX + 6, cursorY + 14);
+  doc.text(loan.area || "No especificada", marginX + (pageWidth - 2 * marginX) / 2, cursorY + 14);
+
+  cursorY += 28;
+
+  // Section 2: Equipment Details
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(164, 0, 0);
+  doc.text("2. ESPECIFICACIONES DEL HARDWARE ENTREGADO", marginX, cursorY);
+  cursorY += 5;
+
+  const compType = componentTypes.find((c) => c.id === loan.itemType);
+  const compTypeName = compType ? compType.name : loan.itemType;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 32, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Descripción del Dispositivo:", marginX + 6, cursorY + 7);
+  doc.text("Cantidad:", marginX + 110, cursorY + 7);
+  doc.text("Tipo / Categoría:", marginX + 140, cursorY + 7);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(loan.itemName, marginX + 6, cursorY + 13);
+  doc.text(`${loan.quantity} und.`, marginX + 110, cursorY + 13);
+  doc.text(compTypeName, marginX + 140, cursorY + 13);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Número de Serie (S/N):", marginX + 6, cursorY + 22);
+  doc.text("Origen:", marginX + 110, cursorY + 22);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(loan.serial || "No registrado / Sin serie visible", marginX + 6, cursorY + 27);
+  doc.text(loan.inventoryItemId ? "Stock Inventario SIA" : "Equipo General", marginX + 110, cursorY + 27);
+
+  cursorY += 38;
+
+  // Section 3: Purpose, Destination & Dates
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(164, 0, 0);
+  doc.text("3. MOTIVO DE SALIDA Y FECHAS DE COMPROMISO", marginX, cursorY);
+  cursorY += 5;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 30, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Motivo:", marginX + 6, cursorY + 7);
+  doc.text("Destino / Ubicación:", marginX + 90, cursorY + 7);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(loan.purpose, marginX + 6, cursorY + 12);
+  doc.text(loan.destination || "Sede Principal / Trabajo Remoto", marginX + 90, cursorY + 12);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Fecha de Salida:", marginX + 6, cursorY + 21);
+  doc.text("Fecha Estimada de Devolución:", marginX + 90, cursorY + 21);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(
+    new Date(loan.checkoutDate).toLocaleDateString("es-CO", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }),
+    marginX + 6,
+    cursorY + 26
+  );
+  doc.text(loan.expectedReturnDate || "Pendiente de definir", marginX + 90, cursorY + 26);
+
+  cursorY += 36;
+
+  // Section 4: Terms
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 22, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("TÉRMINOS Y COMPROMISO DE CUIDADO:", marginX + 5, cursorY + 5);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  const terms =
+    "El colaborador declara recibir a satisfacción el equipo aquí descrito en óptimas condiciones de funcionamiento. Se compromete a destinarlo exclusivamente a labores laborales de Consultorsalud, salvaguardar su integridad física y devolverlo al área de TI en la fecha estipulada o ante requerimiento.";
+  const splitTerms = doc.splitTextToSize(terms, pageWidth - 2 * marginX - 10);
+  doc.text(splitTerms, marginX + 5, cursorY + 10);
+
+  cursorY += 32;
+
+  // Signatures
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("CONSTANCIA DE ENTREGA Y RECEPCIÓN:", marginX, cursorY);
+  cursorY += 20;
+
+  const sigW = (pageWidth - 2 * marginX - 25) / 2;
+
+  // Left Sig: Colaborador
+  doc.setDrawColor(148, 163, 184);
+  doc.line(marginX, cursorY, marginX + sigW, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Firma de Recibido / Colaborador", marginX + sigW / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`C.C. _______________________`, marginX + sigW / 2, cursorY + 8, { align: "center" });
+  doc.text(`${loan.requesterName}`, marginX + sigW / 2, cursorY + 12, { align: "center" });
+
+  // Right Sig: TI
+  doc.line(pageWidth - marginX - sigW, cursorY, pageWidth - marginX, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Firma de Entrega / Responsable TI", pageWidth - marginX - sigW / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Consultorsalud TI — Soporte", pageWidth - marginX - sigW / 2, cursorY + 8, { align: "center" });
+  doc.text(`Fecha: ${new Date().toLocaleDateString("es-CO")}`, pageWidth - marginX - sigW / 2, cursorY + 12, { align: "center" });
+
+  // Save
+  doc.save(`Acta_Salida_Equipo_${loan.id}.pdf`);
+};
+
