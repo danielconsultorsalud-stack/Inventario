@@ -242,6 +242,7 @@ async function startServer() {
       areas: seed.areas || [],
       licenses: seed.licenses || [],
       inventoryItems: seed.inventoryItems || [],
+      equipmentLoans: seed.equipmentLoans || [],
       auditLogs: seed.auditLogs || [],
       decommissionedItems: seed.decommissionedItems || []
     };

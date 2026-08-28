@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { X, Download, Upload, AlertTriangle, CheckCircle, Database, FileText, ChevronRight, RefreshCw, Cloud, CloudOff, Info } from "lucide-react";
-import { Area, Database as AppDatabase, License, InventoryItem, ComponentType, AuditLogEntry } from "../types";
+import { Area, Database as AppDatabase, License, InventoryItem, ComponentType, AuditLogEntry, EquipmentLoan } from "../types";
 
 interface BackupModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface BackupModalProps {
   areas: Area[];
   licenses: License[];
   inventoryItems: InventoryItem[];
+  equipmentLoans?: EquipmentLoan[];
   auditLogs: AuditLogEntry[];
   decommissionedItems: any[];
   onExportCSV?: () => void;
@@ -19,6 +20,7 @@ interface BackupModalProps {
     areas: Area[];
     licenses: License[];
     inventoryItems: InventoryItem[];
+    equipmentLoans?: EquipmentLoan[];
     auditLogs: AuditLogEntry[];
     decommissionedItems: any[];
   }) => void;
@@ -32,6 +34,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   areas,
   licenses,
   inventoryItems,
+  equipmentLoans = [],
   auditLogs,
   decommissionedItems,
   onExportCSV,
@@ -44,6 +47,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     areas?: Area[];
     licenses?: License[];
     inventoryItems?: InventoryItem[];
+    equipmentLoans?: EquipmentLoan[];
     auditLogs?: AuditLogEntry[];
     decommissionedItems?: any[];
   } | null>(null);
@@ -64,6 +68,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         areas,
         licenses,
         inventoryItems,
+        equipmentLoans,
         auditLogs,
         decommissionedItems,
       };
@@ -189,6 +194,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         areas: parsedData.areas && parsedData.areas.length > 0 ? parsedData.areas : areas,
         licenses: parsedData.licenses && parsedData.licenses.length > 0 ? parsedData.licenses : licenses,
         inventoryItems: parsedData.inventoryItems && parsedData.inventoryItems.length > 0 ? parsedData.inventoryItems : inventoryItems,
+        equipmentLoans: parsedData.equipmentLoans && parsedData.equipmentLoans.length > 0 ? parsedData.equipmentLoans : equipmentLoans,
         auditLogs: parsedData.auditLogs && parsedData.auditLogs.length > 0 ? parsedData.auditLogs : [],
         decommissionedItems: parsedData.decommissionedItems && parsedData.decommissionedItems.length > 0 ? parsedData.decommissionedItems : decommissionedItems,
       });

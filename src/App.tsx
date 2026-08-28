@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Monitor, FileSpreadsheet, Plus, HelpCircle, KeyRound, ClipboardList, FileDown, Database, RefreshCw, CloudUpload, ShieldAlert, X, Pencil } from "lucide-react";
-import { Area, Database as AppDatabase, AssetData, License, InventoryItem, ComponentType, AuditLogEntry, DecommissionedItem } from "./types";
+import { Monitor, FileSpreadsheet, Plus, HelpCircle, KeyRound, ClipboardList, FileDown, Database, RefreshCw, CloudUpload, ShieldAlert, X, Pencil, Package } from "lucide-react";
+import { Area, Database as AppDatabase, AssetData, License, InventoryItem, ComponentType, AuditLogEntry, DecommissionedItem, EquipmentLoan } from "./types";
 import { OfficeMap } from "./components/OfficeMap";
 import { AssetModal } from "./components/AssetModal";
 import { AreaManagerModal } from "./components/AreaManagerModal";
@@ -11,6 +11,8 @@ import { BackupModal } from "./components/BackupModal";
 import { Tooltip } from "./components/Tooltip";
 import { InventoryModule } from "./components/InventoryModule";
 import { DecommissionedModule } from "./components/DecommissionedModule";
+import { EquipmentLoansModule } from "./components/EquipmentLoansModule";
+import { EquipmentLoanPublicModal } from "./components/EquipmentLoanPublicModal";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal";
 import { generatePDFReport } from "./utils/pdfGenerator";
 import { db, doc, getDoc, setDoc, onSnapshot } from "./utils/firebase";
@@ -187,6 +189,30 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [equipmentLoans, setEquipmentLoans] = useState<EquipmentLoan[]>(() => {
+    const saved = localStorage.getItem("sia_equipment_loans_v5");
+    return saved ? JSON.parse(saved) : [
+      {
+        id: "salida-init-1",
+        requesterName: "Carlos Pérez",
+        area: "Desarrollo TI",
+        itemName: "Monitor HP v22v FHD 21.5''",
+        itemType: "monitor",
+        quantity: 1,
+        serial: "HP-MON-9982",
+        purpose: "Trabajo temporal en sala alterna",
+        destination: "Sede Alterna",
+        checkoutDate: new Date().toISOString(),
+        expectedReturnDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+        status: "prestado",
+        notes: "Entregado con cable de poder y HDMI.",
+      }
+    ];
+  });
+
+  // Modal Public Loan Request State (available before login & inside)
+  const [isPublicLoanModalOpen, setIsPublicLoanModalOpen] = useState(false);
+
   // License popup & tooltip state
   const [selectedLicenseForPopup, setSelectedLicenseForPopup] = useState<License | null>(null);
   const [hoveredLicenseId, setHoveredLicenseId] = useState<string | null>(null);
@@ -272,7 +298,8 @@ export default function App() {
     licsVal: any,
     invVal: any,
     logsVal: any,
-    decVal: any
+    decVal: any,
+    loansVal?: any
   ) => {
     if (!targetId) return;
     try {
@@ -284,6 +311,7 @@ export default function App() {
         inventoryItems: invVal,
         auditLogs: logsVal,
         decommissionedItems: decVal || [],
+        equipmentLoans: loansVal || [],
         updatedAt: new Date().toISOString(),
       };
       
@@ -309,6 +337,7 @@ export default function App() {
         if (serverData.areas) setAreas(serverData.areas);
         if (serverData.licenses) setLicenses(serverData.licenses);
         if (serverData.inventoryItems) setInventoryItems(serverData.inventoryItems);
+        if (serverData.equipmentLoans) setEquipmentLoans(serverData.equipmentLoans);
         if (serverData.auditLogs) setAuditLogs(serverData.auditLogs);
         if (serverData.decommissionedItems) setDecommissionedItems(serverData.decommissionedItems);
         
@@ -330,6 +359,7 @@ export default function App() {
       if (serverData.areas) setAreas(serverData.areas);
       if (serverData.licenses) setLicenses(serverData.licenses);
       if (serverData.inventoryItems) setInventoryItems(serverData.inventoryItems);
+      if (serverData.equipmentLoans) setEquipmentLoans(serverData.equipmentLoans);
       if (serverData.auditLogs) setAuditLogs(serverData.auditLogs);
       if (serverData.decommissionedItems) setDecommissionedItems(serverData.decommissionedItems);
       
@@ -380,6 +410,7 @@ export default function App() {
           areas,
           licenses,
           inventoryItems,
+          equipmentLoans,
           auditLogs: updatedLogs,
           decommissionedItems
         });
@@ -511,7 +542,8 @@ export default function App() {
                   user: "danielconsultorsalud@gmail.com"
                 }
               ],
-              decommissionedItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]") : []
+              decommissionedItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_decommissioned_v5") || "[]") : [],
+              equipmentLoans: hasLocalData ? JSON.parse(localStorage.getItem("sia_equipment_loans_v5") || "[]") : []
             };
 
             await fetch(getApiUrl("/api/seed"), {
@@ -525,6 +557,7 @@ export default function App() {
             setAreas(seedPayload.areas);
             setLicenses(seedPayload.licenses);
             setInventoryItems(seedPayload.inventoryItems);
+            setEquipmentLoans(seedPayload.equipmentLoans || []);
             setAuditLogs(seedPayload.auditLogs);
             setDecommissionedItems(seedPayload.decommissionedItems || []);
           } else {
@@ -533,6 +566,7 @@ export default function App() {
             setAreas(serverData.areas || DEFAULT_AREAS);
             setLicenses(serverData.licenses || []);
             setInventoryItems(serverData.inventoryItems || []);
+            setEquipmentLoans(serverData.equipmentLoans || []);
             setAuditLogs(serverData.auditLogs || []);
             setDecommissionedItems(serverData.decommissionedItems || []);
           }
@@ -564,6 +598,7 @@ export default function App() {
               if (parsed.field === "areas") setAreas(parsed.value);
               if (parsed.field === "licenses") setLicenses(parsed.value);
               if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
+              if (parsed.field === "equipmentLoans") setEquipmentLoans(parsed.value);
               if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
               if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
 
@@ -659,6 +694,16 @@ export default function App() {
     }
   }, [decommissionedItems]);
 
+  useEffect(() => {
+    localStorage.setItem("sia_equipment_loans_v5", JSON.stringify(equipmentLoans));
+    if (!isIncomingUpdate.current) {
+      if (syncTimeoutRefs.current["equipmentLoans"]) clearTimeout(syncTimeoutRefs.current["equipmentLoans"]);
+      syncTimeoutRefs.current["equipmentLoans"] = setTimeout(() => {
+        sendUpdate("equipmentLoans", equipmentLoans);
+      }, 1200);
+    }
+  }, [equipmentLoans]);
+
   // Logging engine inside state
   const logEvent = (action: string, description: string, user = "danielconsultorsalud@gmail.com") => {
     const newEntry: AuditLogEntry = {
@@ -688,6 +733,7 @@ export default function App() {
     areas: Area[];
     licenses: License[];
     inventoryItems: InventoryItem[];
+    equipmentLoans?: EquipmentLoan[];
     auditLogs: AuditLogEntry[];
     decommissionedItems?: any[];
   }) => {
@@ -696,6 +742,9 @@ export default function App() {
     setAreas(backupData.areas);
     setLicenses(backupData.licenses);
     setInventoryItems(backupData.inventoryItems);
+    if (backupData.equipmentLoans) {
+      setEquipmentLoans(backupData.equipmentLoans);
+    }
     if (backupData.decommissionedItems) {
       setDecommissionedItems(backupData.decommissionedItems);
     }
@@ -711,7 +760,99 @@ export default function App() {
   };
 
 
-  // Handle Component Types Operations
+  // Handle Equipment Loan Operations (Préstamos y Salidas de Equipos)
+  const handleCreateEquipmentLoan = (
+    loanData: Omit<EquipmentLoan, "id" | "checkoutDate" | "status">
+  ): EquipmentLoan => {
+    const newId = `salida-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const newLoan: EquipmentLoan = {
+      ...loanData,
+      id: newId,
+      checkoutDate: new Date().toISOString(),
+      status: "prestado",
+    };
+
+    // If linked to an inventory item, deduct from available stock
+    if (loanData.inventoryItemId) {
+      setInventoryItems((prev) =>
+        prev.map((item) => {
+          if (item.id === loanData.inventoryItemId) {
+            const nextQty = Math.max(0, item.quantity - loanData.quantity);
+            return { ...item, quantity: nextQty };
+          }
+          return item;
+        })
+      );
+    }
+
+    setEquipmentLoans((prev) => [newLoan, ...prev]);
+
+    const actor = isAuthenticated ? "danielconsultorsalud@gmail.com" : loanData.requesterName;
+    logEvent(
+      "SALIDA_EQUIPO",
+      `Se registró la salida/préstamo de ${loanData.quantity}x "${loanData.itemName}" asignado a "${loanData.requesterName}" (Motivo: ${loanData.purpose}).`,
+      actor
+    );
+
+    return newLoan;
+  };
+
+  const handleReturnEquipmentLoan = (loanId: string, returnNotes?: string) => {
+    const loan = equipmentLoans.find((l) => l.id === loanId);
+    if (!loan) return;
+
+    const returnTimestamp = new Date().toISOString();
+
+    // Reincorporate stock into inventory if it originated from an inventory item
+    if (loan.inventoryItemId) {
+      setInventoryItems((prev) =>
+        prev.map((item) => {
+          if (item.id === loan.inventoryItemId) {
+            return { ...item, quantity: item.quantity + loan.quantity };
+          }
+          return item;
+        })
+      );
+    }
+
+    setEquipmentLoans((prev) =>
+      prev.map((l) =>
+        l.id === loanId
+          ? {
+              ...l,
+              status: "devuelto",
+              returnedDate: returnTimestamp,
+              returnNotes: returnNotes || l.returnNotes,
+            }
+          : l
+      )
+    );
+
+    logEvent(
+      "ENTREGA_EQUIPO",
+      `Se confirmó la entrega/devolución de ${loan.quantity}x "${loan.itemName}" de "${loan.requesterName}". Equipo reingresado al inventario con éxito.`
+    );
+  };
+
+  const handleDeleteEquipmentLoan = (loanId: string) => {
+    const loan = equipmentLoans.find((l) => l.id === loanId);
+    setEquipmentLoans((prev) => prev.filter((l) => l.id !== loanId));
+    if (loan) {
+      logEvent(
+        "ELIMINAR_SALIDA",
+        `Se eliminó del registro histórico la salida #${loan.id} de "${loan.itemName}" (${loan.requesterName}).`
+      );
+    }
+  };
+
+  // Extract known collaborator names from the active office map database for smart autocomplete
+  const knownEmployees = Array.from(
+    new Set(
+      Object.values(database)
+        .map((d: any) => d?.asignado_a)
+        .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    )
+  );
   const handleAddComponentType = (name: string, icon: string) => {
     // Generate an ID based on sanitized name to prevent collisions but be readable
     const safeId = name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
@@ -1215,6 +1356,25 @@ export default function App() {
               >
                 <KeyRound size={14} /> Acceder al Sistema
               </button>
+
+              {/* Pre-login module: Solicitar Salida de Equipo */}
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between text-left">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">
+                    ¿Requieres un equipo temporal?
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPublicLoanModalOpen(true)}
+                  className="w-full py-3 bg-amber-50 hover:bg-amber-100/90 text-amber-900 border border-amber-200/90 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:shadow-sm"
+                >
+                  <Package size={14} className="text-amber-700" /> Solicitar Salida de Equipo
+                </button>
+                <p className="text-[9px] text-slate-400 text-center font-medium">
+                  Registra préstamos y salidas de hardware a colaboradores sin iniciar sesión
+                </p>
+              </div>
             </div>
 
             <div className="mt-8 text-[9px] text-slate-450 font-bold uppercase tracking-widest font-mono">
@@ -1223,6 +1383,17 @@ export default function App() {
           </div>
 
         </div>
+
+        {/* Modal de Solicitud de Salida de Equipo (Público) */}
+        <EquipmentLoanPublicModal
+          isOpen={isPublicLoanModalOpen}
+          onClose={() => setIsPublicLoanModalOpen(false)}
+          inventoryItems={inventoryItems}
+          componentTypes={componentTypes}
+          areas={areas}
+          knownEmployees={knownEmployees}
+          onSubmitLoan={handleCreateEquipmentLoan}
+        />
       </div>
     );
   }
@@ -1286,8 +1457,24 @@ export default function App() {
               </div>
             </div>
 
-            {/* Grupo 1: Configuración */}
+            {/* Grupo 1: Configuración & Préstamos */}
             <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-100 p-1.5 rounded-2xl w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  const el = document.getElementById("module-equipment-loans");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs relative"
+                title="Ver módulo de salidas y préstamos de equipos"
+              >
+                <Package size={12} className="text-amber-600" /> Salidas
+                {equipmentLoans.filter((l) => l.status === "prestado").length > 0 && (
+                  <span className="bg-amber-500 text-white rounded-full font-mono text-[8px] font-black px-1.5 py-0.2 border border-white">
+                    {equipmentLoans.filter((l) => l.status === "prestado").length}
+                  </span>
+                )}
+              </button>
+
               <button
                 onClick={() => setIsAreaManagerOpen(true)}
                 className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
@@ -1528,6 +1715,18 @@ export default function App() {
           />
         </main>
 
+        {/* MODULO DE SALIDAS Y PRESTAMOS DE EQUIPOS */}
+        <div id="module-equipment-loans" className="border-t border-slate-200 pt-8">
+          <EquipmentLoansModule
+            loans={equipmentLoans}
+            inventoryItems={inventoryItems}
+            componentTypes={componentTypes}
+            onReturnLoan={handleReturnEquipmentLoan}
+            onDeleteLoan={handleDeleteEquipmentLoan}
+            onOpenNewLoanModal={() => setIsPublicLoanModalOpen(true)}
+          />
+        </div>
+
         {/* MODULO DE INVENTARIO */}
         <div className="border-t border-slate-200 pt-8">
           <InventoryModule
@@ -1630,10 +1829,21 @@ export default function App() {
         areas={areas}
         licenses={licenses}
         inventoryItems={inventoryItems}
+        equipmentLoans={equipmentLoans}
         auditLogs={auditLogs}
         decommissionedItems={decommissionedItems}
         onExportCSV={handleExportCSV}
         onRestoreBackup={handleRestoreBackup}
+      />
+
+      <EquipmentLoanPublicModal
+        isOpen={isPublicLoanModalOpen}
+        onClose={() => setIsPublicLoanModalOpen(false)}
+        inventoryItems={inventoryItems}
+        componentTypes={componentTypes}
+        areas={areas}
+        knownEmployees={knownEmployees}
+        onSubmitLoan={handleCreateEquipmentLoan}
       />
 
       <WorkspaceConfigModal

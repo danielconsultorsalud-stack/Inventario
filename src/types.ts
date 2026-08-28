@@ -76,4 +76,24 @@ export interface DecommissionedItem {
   originalWorkstation?: string;
 }
 
+export interface EquipmentLoan {
+  id: string;
+  requesterName: string;
+  area?: string;
+  itemName: string;
+  itemType: string;
+  inventoryItemId?: string;
+  quantity: number;
+  serial?: string;
+  purpose: string;
+  destination?: string;
+  checkoutDate: string;
+  expectedReturnDate?: string;
+  status: "prestado" | "devuelto";
+  returnedDate?: string;
+  returnNotes?: string;
+  notes?: string;
+}
+
+
 

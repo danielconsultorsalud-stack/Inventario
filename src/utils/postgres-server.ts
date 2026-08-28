@@ -80,6 +80,27 @@ export async function createTables(poolInstance: pg.Pool) {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS sia_equipment_loans (
+        id VARCHAR(255) PRIMARY KEY,
+        requester_name TEXT NOT NULL,
+        area TEXT,
+        item_name TEXT NOT NULL,
+        item_type VARCHAR(255) NOT NULL,
+        inventory_item_id VARCHAR(255),
+        quantity INT NOT NULL,
+        serial TEXT,
+        purpose TEXT NOT NULL,
+        destination TEXT,
+        checkout_date VARCHAR(100) NOT NULL,
+        expected_return_date VARCHAR(100),
+        status VARCHAR(50) NOT NULL,
+        returned_date VARCHAR(100),
+        return_notes TEXT,
+        notes TEXT
+      );
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS sia_assets (
         puesto_id VARCHAR(255) PRIMARY KEY,
         nombre_equipo TEXT,
@@ -341,6 +362,74 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
           await client.query("DELETE FROM sia_decommissioned_items");
         }
       }
+    } else if (field === "equipmentLoans") {
+      if (!Array.isArray(value) || value.length === 0) {
+        await client.query("DELETE FROM sia_equipment_loans");
+      } else {
+        const insertedLoans = new Set<string>();
+        const filtered = value.filter(loan => loan && loan.id && !insertedLoans.has(loan.id));
+        
+        if (filtered.length > 0) {
+          const ids = filtered.map(loan => loan.id);
+          const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+          await client.query(`DELETE FROM sia_equipment_loans WHERE id NOT IN (${placeholders})`, ids);
+          
+          const chunkSize = 50;
+          for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+            const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+            const valuePlaceholders: string[] = [];
+            const flatValues: any[] = [];
+            for (let i = 0; i < chunk.length; i++) {
+              const loan = chunk[i];
+              insertedLoans.add(loan.id);
+              const offset = i * 16;
+              valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}, $${offset + 16})`);
+              flatValues.push(
+                loan.id,
+                loan.requesterName || "",
+                loan.area || null,
+                loan.itemName || "",
+                loan.itemType || "otros",
+                loan.inventoryItemId || null,
+                loan.quantity || 1,
+                loan.serial || null,
+                loan.purpose || "",
+                loan.destination || null,
+                loan.checkoutDate || new Date().toISOString(),
+                loan.expectedReturnDate || null,
+                loan.status || "prestado",
+                loan.returnedDate || null,
+                loan.returnNotes || null,
+                loan.notes || null
+              );
+            }
+            await client.query(`
+              INSERT INTO sia_equipment_loans (
+                id, requester_name, area, item_name, item_type, inventory_item_id, quantity, serial, purpose, destination, checkout_date, expected_return_date, status, returned_date, return_notes, notes
+              ) 
+              VALUES ${valuePlaceholders.join(", ")} 
+              ON CONFLICT (id) DO UPDATE SET 
+                requester_name = EXCLUDED.requester_name, 
+                area = EXCLUDED.area, 
+                item_name = EXCLUDED.item_name, 
+                item_type = EXCLUDED.item_type, 
+                inventory_item_id = EXCLUDED.inventory_item_id, 
+                quantity = EXCLUDED.quantity, 
+                serial = EXCLUDED.serial, 
+                purpose = EXCLUDED.purpose, 
+                destination = EXCLUDED.destination, 
+                checkout_date = EXCLUDED.checkout_date, 
+                expected_return_date = EXCLUDED.expected_return_date, 
+                status = EXCLUDED.status, 
+                returned_date = EXCLUDED.returned_date, 
+                return_notes = EXCLUDED.return_notes, 
+                notes = EXCLUDED.notes
+            `, flatValues);
+          }
+        } else {
+          await client.query("DELETE FROM sia_equipment_loans");
+        }
+      }
     } else if (field === "auditLogs") {
       const logsSlice = Array.isArray(value) ? value.slice(0, 500) : [];
       if (logsSlice.length === 0) {
@@ -515,6 +604,7 @@ export async function migrateAllToPostgres(poolInstance: pg.Pool, localData: any
     "componentTypes",
     "inventoryItems",
     "decommissionedItems",
+    "equipmentLoans",
     "auditLogs",
     "database"
   ];
@@ -535,6 +625,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
     const compsRes = await client.query("SELECT * FROM sia_component_types");
     const invRes = await client.query("SELECT * FROM sia_inventory_items");
     const decRes = await client.query("SELECT * FROM sia_decommissioned_items");
+    const loansRes = await client.query("SELECT * FROM sia_equipment_loans ORDER BY checkout_date DESC");
     const assetsRes = await client.query("SELECT * FROM sia_assets");
     const logsRes = await client.query("SELECT * FROM sia_audit_logs ORDER BY timestamp DESC LIMIT 500");
 
@@ -567,6 +658,26 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
       reason: r.reason,
       timestamp: r.timestamp,
       originalWorkstation: r.original_workstation || undefined,
+    }));
+
+    // Convert equipment loans
+    const equipmentLoans = loansRes.rows.map((r) => ({
+      id: r.id,
+      requesterName: r.requester_name,
+      area: r.area || undefined,
+      itemName: r.item_name,
+      itemType: r.item_type,
+      inventoryItemId: r.inventory_item_id || undefined,
+      quantity: r.quantity,
+      serial: r.serial || undefined,
+      purpose: r.purpose,
+      destination: r.destination || undefined,
+      checkoutDate: r.checkout_date,
+      expectedReturnDate: r.expected_return_date || undefined,
+      status: r.status as "prestado" | "devuelto",
+      returnedDate: r.returned_date || undefined,
+      returnNotes: r.return_notes || undefined,
+      notes: r.notes || undefined,
     }));
 
     // Convert audit logs
@@ -628,6 +739,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
       areas,
       licenses,
       inventoryItems,
+      equipmentLoans,
       auditLogs,
       decommissionedItems,
     };
