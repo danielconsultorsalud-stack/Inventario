@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { Database, ComponentType, License, InventoryItem, AssetData, EquipmentLoan } from "../types";
+import { Database, ComponentType, License, InventoryItem, AssetData, EquipmentLoan, FurnitureItem, Area } from "../types";
 
 // Helper function to count assignments in all workstations
 const getActiveAssignmentsCount = (itemId: string, database: Database): number => {
@@ -970,4 +970,393 @@ export const generateSingleLoanVoucherPDF = (
   // Save
   doc.save(`Acta_Salida_Equipo_${loan.id}.pdf`);
 };
+
+/**
+ * Generates an official report PDF for office furniture and fixtures (Inventario de Mobiliario y Enseres)
+ */
+export const generateFurniturePDFReport = (
+  items: FurnitureItem[],
+  areas: Area[] = []
+) => {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 14;
+  let cursorY = 20;
+
+  const categoryNames: Record<string, string> = {
+    silla: "Sillas y Asientos",
+    escritorio: "Escritorios y Mesas",
+    cajonera: "Cajoneras y Gavetas",
+    archivador: "Archivadores y Lockers",
+    mesa_reuniones: "Mesas de Reunión",
+    estanteria: "Estanterías y Armarios",
+    ergonomia: "Accesorios Ergonómicos",
+    otros: "Otros Enseres",
+  };
+
+  const getCategoryName = (type: string) => categoryNames[type] || type;
+
+  // Header & Footer Decoration for each page
+  const addHeaderDecoration = (pageNumber: number) => {
+    // Top amber brand bar
+    doc.setFillColor(180, 83, 9); // amber-700
+    doc.rect(0, 0, pageWidth, 5, "F");
+
+    // Top Right Brand Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("SIA CLOUD — CONSULTORSALUD MOBILIARIO", pageWidth - marginX, 12, { align: "right" });
+
+    // Footer rule
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, pageHeight - 15, pageWidth - marginX, pageHeight - 15);
+
+    // Footer text
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `Control de Activos y Mobiliario de Oficina  |  Generado: ${new Date().toLocaleString("es-CO")}  |  Página ${pageNumber}`,
+      marginX,
+      pageHeight - 9
+    );
+  };
+
+  const checkPageOverflow = (neededHeight: number) => {
+    if (cursorY + neededHeight > pageHeight - 20) {
+      doc.addPage();
+      const nextPageNum = (doc as any).internal.getNumberOfPages();
+      addHeaderDecoration(nextPageNum);
+      cursorY = 22;
+    }
+  };
+
+  // 1. PAGE 1 HEADER
+  addHeaderDecoration(1);
+
+  // Big Display Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(30, 41, 59);
+  doc.text("INFORME OFICIAL DE INVENTARIO DE MOBILIARIO Y ENSERES", marginX, cursorY);
+  cursorY += 6;
+
+  // Subtitle
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(180, 83, 9); // amber
+  doc.text("CONTROL DE ACTIVOS FIJOS, PUESTOS Y CUSTODIA POR PERSONAL", marginX, cursorY);
+  cursorY += 10;
+
+  // Statistics Calculation
+  const totalItems = items.length;
+  const totalUnits = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const assignedUnits = items
+    .filter((i) => i.status === "asignado" || !!i.assignedTo)
+    .reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const availableUnits = items
+    .filter((i) => i.status === "disponible" && !i.assignedTo)
+    .reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const maintenanceUnits = items
+    .filter((i) => i.status === "mantenimiento")
+    .reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const distinctEmployeesWithFurniture = Array.from(
+    new Set(items.filter((i) => i.assignedTo).map((i) => i.assignedTo as string))
+  );
+
+  // Summary Metrics Box
+  doc.setFillColor(254, 252, 232); // very light warm amber bg
+  doc.setDrawColor(254, 240, 138); // amber border
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 28, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(146, 64, 14); // amber-800
+  doc.text("RESUMEN GENERAL DEL INVENTARIO:", marginX + 5, cursorY + 6);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`* Total Tipos de Muebles Registrados: ${totalItems}`, marginX + 5, cursorY + 12);
+  doc.text(`* Total Unidades Físicas Contabilizadas: ${totalUnits}`, marginX + 5, cursorY + 17);
+  doc.text(`* Unidades Asignadas al Personal: ${assignedUnits} (${Math.round((assignedUnits / (totalUnits || 1)) * 100)}%)`, marginX + 5, cursorY + 22);
+
+  doc.text(`* Unidades Disponibles en Bodega / Almacén: ${availableUnits}`, marginX + 95, cursorY + 12);
+  doc.text(`* Unidades en Mantenimiento / Reparación: ${maintenanceUnits}`, marginX + 95, cursorY + 17);
+  doc.text(`* Colaboradores con Mobiliario en Custodia: ${distinctEmployeesWithFurniture.length}`, marginX + 95, cursorY + 22);
+
+  cursorY += 34;
+
+  // 2. SECCIÓN I: RESUMEN POR CATEGORÍA
+  checkPageOverflow(35);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("I. RESUMEN DE ACTIVOS POR CATEGORÍA DE MOBILIARIO", marginX, cursorY);
+  cursorY += 3;
+
+  doc.setDrawColor(180, 83, 9);
+  doc.setLineWidth(0.5);
+  doc.line(marginX, cursorY, marginX + 35, cursorY);
+  cursorY += 5;
+
+  // Table header for Category Summary
+  doc.setFillColor(248, 250, 252);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 6.5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Categoría", marginX + 3, cursorY + 4.5);
+  doc.text("Total Unidades", marginX + 75, cursorY + 4.5);
+  doc.text("Asignadas", marginX + 110, cursorY + 4.5);
+  doc.text("En Bodega", marginX + 140, cursorY + 4.5);
+  doc.text("Mantenimiento", marginX + 165, cursorY + 4.5);
+  cursorY += 8;
+
+  const categories = Array.from(new Set(items.map((i) => i.type)));
+  categories.forEach((catType) => {
+    checkPageOverflow(7);
+    const catItems = items.filter((i) => i.type === catType);
+    const catTotal = catItems.reduce((acc, c) => acc + (c.quantity || 1), 0);
+    const catAssigned = catItems
+      .filter((c) => c.status === "asignado" || !!c.assignedTo)
+      .reduce((acc, c) => acc + (c.quantity || 1), 0);
+    const catAvailable = catItems
+      .filter((c) => c.status === "disponible" && !c.assignedTo)
+      .reduce((acc, c) => acc + (c.quantity || 1), 0);
+    const catMaint = catItems
+      .filter((c) => c.status === "mantenimiento")
+      .reduce((acc, c) => acc + (c.quantity || 1), 0);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text(getCategoryName(catType), marginX + 3, cursorY + 4);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(String(catTotal), marginX + 75, cursorY + 4);
+    doc.text(String(catAssigned), marginX + 110, cursorY + 4);
+    doc.text(String(catAvailable), marginX + 140, cursorY + 4);
+    doc.text(String(catMaint), marginX + 165, cursorY + 4);
+
+    doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.2);
+    doc.line(marginX, cursorY + 6, pageWidth - marginX, cursorY + 6);
+    cursorY += 6.5;
+  });
+
+  cursorY += 6;
+
+  // 3. SECCIÓN II: LISTADO DETALLADO DE MOBILIARIO Y ENSERES
+  checkPageOverflow(40);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("II. CATÁLOGO DETALLADO DE MOBILIARIO Y ASIGNACIONES", marginX, cursorY);
+  cursorY += 3;
+
+  doc.setDrawColor(180, 83, 9);
+  doc.setLineWidth(0.5);
+  doc.line(marginX, cursorY, marginX + 35, cursorY);
+  cursorY += 5;
+
+  // Header Table
+  const drawDetailedTableHeader = () => {
+    doc.setFillColor(248, 250, 252);
+    doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 6.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Código", marginX + 2, cursorY + 4.5);
+    doc.text("Descripción / Mueble", marginX + 22, cursorY + 4.5);
+    doc.text("Categoría", marginX + 78, cursorY + 4.5);
+    doc.text("Cant.", marginX + 106, cursorY + 4.5);
+    doc.text("Condición", marginX + 118, cursorY + 4.5);
+    doc.text("Colaborador Asignado", marginX + 137, cursorY + 4.5);
+    doc.text("Puesto / Ubicación", marginX + 172, cursorY + 4.5);
+    cursorY += 7.5;
+  };
+
+  drawDetailedTableHeader();
+
+  items.forEach((item, idx) => {
+    // Estimate height
+    const nameLines = doc.splitTextToSize(item.name, 54);
+    const itemHeight = Math.max(7, nameLines.length * 3.6 + 3);
+
+    if (cursorY + itemHeight > pageHeight - 20) {
+      doc.addPage();
+      const pNum = (doc as any).internal.getNumberOfPages();
+      addHeaderDecoration(pNum);
+      cursorY = 22;
+      drawDetailedTableHeader();
+    }
+
+    // Zebra striping
+    if (idx % 2 === 0) {
+      doc.setFillColor(252, 252, 253);
+      doc.rect(marginX, cursorY - 1, pageWidth - 2 * marginX, itemHeight, "F");
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(item.code || "—", marginX + 2, cursorY + 3);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(nameLines, marginX + 22, cursorY + 3);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    doc.text(getCategoryName(item.type), marginX + 78, cursorY + 3);
+    doc.text(String(item.quantity || 1), marginX + 108, cursorY + 3);
+    doc.text((item.condition || "Bueno").toUpperCase(), marginX + 118, cursorY + 3);
+
+    // Employee
+    if (item.assignedTo) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      const empLines = doc.splitTextToSize(item.assignedTo, 33);
+      doc.text(empLines, marginX + 137, cursorY + 3);
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(148, 163, 184);
+      doc.text("En Bodega", marginX + 137, cursorY + 3);
+    }
+
+    // Location
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const locText = item.workstation || item.area || item.location || "Almacén Central";
+    const locLines = doc.splitTextToSize(locText, 24);
+    doc.text(locLines, marginX + 172, cursorY + 3);
+
+    cursorY += itemHeight;
+
+    // Line separator
+    doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.15);
+    doc.line(marginX, cursorY - 0.5, pageWidth - marginX, cursorY - 0.5);
+  });
+
+  cursorY += 8;
+
+  // 4. SECCIÓN III: CUSTODIA POR COLABORADOR ("EL MISMO PERSONAL")
+  checkPageOverflow(40);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("III. DETALLE DE MOBILIARIO EN CUSTODIA POR COLABORADOR", marginX, cursorY);
+  cursorY += 3;
+
+  doc.setDrawColor(180, 83, 9);
+  doc.setLineWidth(0.5);
+  doc.line(marginX, cursorY, marginX + 35, cursorY);
+  cursorY += 6;
+
+  distinctEmployeesWithFurniture.forEach((empName) => {
+    const empItems = items.filter((i) => i.assignedTo === empName);
+    const neededH = 12 + empItems.length * 5;
+
+    checkPageOverflow(neededH);
+
+    // Employee banner box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(marginX, cursorY, pageWidth - 2 * marginX, 6.5, 1, 1, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    const firstItem = empItems[0];
+    const areaPuesto = [firstItem?.area, firstItem?.workstation].filter(Boolean).join(" • ");
+    doc.text(`Colaborador: ${empName}  ${areaPuesto ? `[${areaPuesto}]` : ""}`, marginX + 3, cursorY + 4.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(180, 83, 9);
+    doc.text(`${empItems.length} ítem(s)`, pageWidth - marginX - 5, cursorY + 4.5, { align: "right" });
+
+    cursorY += 8.5;
+
+    empItems.forEach((m) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+      const codePart = m.code ? `[${m.code}] ` : "";
+      const condPart = m.condition ? ` (Condición: ${m.condition})` : "";
+      doc.text(`• ${codePart}${m.name} — Cant: ${m.quantity || 1}${condPart}`, marginX + 5, cursorY);
+      cursorY += 4.5;
+    });
+
+    cursorY += 3;
+  });
+
+  // 5. SECCIÓN IV: CONSTANCIA Y FIRMAS
+  checkPageOverflow(42);
+  cursorY += 6;
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, cursorY, pageWidth - 2 * marginX, 15, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("DECLARACIÓN DE INVENTARIO Y CONTROL DE ACTIVOS:", marginX + 4, cursorY + 4.5);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text(
+    "El presente informe certifica el estado y la asignación del mobiliario institucional de Consultorsalud a la fecha. Cada colaborador es responsable del cuidado del mobiliario asignado a su puesto de trabajo.",
+    marginX + 4,
+    cursorY + 9,
+    { maxWidth: pageWidth - 2 * marginX - 8 }
+  );
+
+  cursorY += 24;
+
+  const sigWidth = 75;
+  // Signature 1
+  doc.setDrawColor(148, 163, 184);
+  doc.line(marginX, cursorY, marginX + sigWidth, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Responsable de Activos y Mobiliario", marginX + sigWidth / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Consultorsalud — Administración", marginX + sigWidth / 2, cursorY + 8, { align: "center" });
+
+  // Signature 2
+  doc.line(pageWidth - marginX - sigWidth, cursorY, pageWidth - marginX, cursorY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Auditoría Interna / Control de Gestión", pageWidth - marginX - sigWidth / 2, cursorY + 4, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Fecha: ${new Date().toLocaleDateString("es-CO")}`, pageWidth - marginX - sigWidth / 2, cursorY + 8, { align: "center" });
+
+  // Save PDF
+  const todayStr = new Date().toISOString().split("T")[0];
+  doc.save(`Inventario_Mobiliario_Consultorsalud_${todayStr}.pdf`);
+};
+
 

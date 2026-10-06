@@ -22,9 +22,11 @@ import {
   X,
   FileSpreadsheet,
   CornerDownRight,
-  FolderOpen
+  FolderOpen,
+  FileDown
 } from "lucide-react";
 import { FurnitureItem, FurnitureCategory, FurnitureStatus, FurnitureCondition, Area, Database as AppDatabase } from "../types";
+import { generateFurniturePDFReport } from "../utils/pdfGenerator";
 
 export const DEFAULT_FURNITURE_CATEGORIES: FurnitureCategory[] = [
   { id: "silla", name: "Sillas y Asientos", icon: "🪑" },
@@ -526,11 +528,20 @@ export const FurnitureModule: React.FC<FurnitureModuleProps> = ({
 
           <button
             type="button"
+            onClick={() => generateFurniturePDFReport(items, areas)}
+            className="bg-red-700 hover:bg-red-650 text-white px-3.5 py-2 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shadow-red-700/10 hover:shadow-red-700/20"
+            title="Descargar informe oficial de mobiliario en formato PDF"
+          >
+            <FileDown size={13} className="text-white" /> Exportar PDF
+          </button>
+
+          <button
+            type="button"
             onClick={handleExportCSV}
             className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3.5 py-2 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Descargar listado en CSV"
           >
-            <Download size={13} className="text-slate-500" /> Exportar
+            <Download size={13} className="text-slate-500" /> Exportar CSV
           </button>
 
           <button

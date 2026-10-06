@@ -15,7 +15,7 @@ import { DecommissionedModule } from "./components/DecommissionedModule";
 import { EquipmentLoansModule } from "./components/EquipmentLoansModule";
 import { EquipmentLoanPublicModal } from "./components/EquipmentLoanPublicModal";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal";
-import { generatePDFReport } from "./utils/pdfGenerator";
+import { generatePDFReport, generateFurniturePDFReport } from "./utils/pdfGenerator";
 import { db, doc, getDoc, setDoc, onSnapshot } from "./utils/firebase";
 import { PostgresSetupModal } from "./components/PostgresSetupModal";
 
@@ -1846,10 +1846,17 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => generatePDFReport(database, componentTypes, licenses, inventoryItems)}
+                onClick={() => {
+                  if (inventorySubModule === "furniture") {
+                    generateFurniturePDFReport(furnitureItems, areas);
+                  } else {
+                    generatePDFReport(database, componentTypes, licenses, inventoryItems);
+                  }
+                }}
                 className="flex-1 sm:flex-initial bg-red-700 hover:bg-red-650 text-white px-4.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-700/10"
+                title={inventorySubModule === "furniture" ? "Generar e imprimir informe PDF de Mobiliario y Enseres" : "Generar e imprimir informe PDF de Activos TI"}
               >
-                <FileDown size={12} className="text-white" /> PDF
+                <FileDown size={12} className="text-white" /> {inventorySubModule === "furniture" ? "PDF Mobiliario" : "PDF"}
               </button>
             </div>
           </div>
