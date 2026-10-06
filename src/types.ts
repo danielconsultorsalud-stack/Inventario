@@ -95,5 +95,29 @@ export interface EquipmentLoan {
   notes?: string;
 }
 
+export type FurnitureStatus = "asignado" | "disponible" | "mantenimiento" | "baja";
+export type FurnitureCondition = "nuevo" | "excelente" | "bueno" | "regular" | "malo";
 
+export interface FurnitureItem {
+  id: string;
+  name: string;
+  type: string; // e.g. "silla", "escritorio", "cajonera", "archivador", "mesa_reuniones", "estanteria", "ergonomia", "otros"
+  code?: string; // Código de inventario / Placa de activo fijo (ej. MOB-001)
+  quantity: number;
+  assignedTo?: string; // Nombre del colaborador ("el mismo personal")
+  workstation?: string; // Puesto / estación asignada
+  area?: string; // Área o departamento del colaborador
+  status: FurnitureStatus;
+  condition?: FurnitureCondition;
+  location?: string; // Ubicación física (ej. Oficina Carlos, Sala Juntas, Bodega)
+  colorMaterial?: string; // Color o material
+  notes?: string;
+  assignedDate?: string;
+  updatedAt?: string;
+}
 
+export interface FurnitureCategory {
+  id: string;
+  name: string;
+  icon: string;
+}

@@ -101,6 +101,26 @@ export async function createTables(poolInstance: pg.Pool) {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS sia_furniture_items (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(100) NOT NULL,
+        code VARCHAR(100),
+        quantity INT NOT NULL DEFAULT 1,
+        assigned_to TEXT,
+        workstation TEXT,
+        area TEXT,
+        status VARCHAR(50) NOT NULL,
+        condition VARCHAR(50),
+        location TEXT,
+        color_material TEXT,
+        notes TEXT,
+        assigned_date VARCHAR(100),
+        updated_at VARCHAR(100)
+      );
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS sia_assets (
         puesto_id VARCHAR(255) PRIMARY KEY,
         nombre_equipo TEXT,
@@ -430,6 +450,72 @@ export async function saveFieldToPostgres(poolInstance: pg.Pool, field: string, 
           await client.query("DELETE FROM sia_equipment_loans");
         }
       }
+    } else if (field === "furnitureItems") {
+      if (!Array.isArray(value) || value.length === 0) {
+        await client.query("DELETE FROM sia_furniture_items");
+      } else {
+        const insertedFurniture = new Set<string>();
+        const filtered = value.filter(item => item && item.id && !insertedFurniture.has(item.id));
+        
+        if (filtered.length > 0) {
+          const ids = filtered.map(item => item.id);
+          const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(", ");
+          await client.query(`DELETE FROM sia_furniture_items WHERE id NOT IN (${placeholders})`, ids);
+          
+          const chunkSize = 50;
+          for (let chunkIdx = 0; chunkIdx < filtered.length; chunkIdx += chunkSize) {
+            const chunk = filtered.slice(chunkIdx, chunkIdx + chunkSize);
+            const valuePlaceholders: string[] = [];
+            const flatValues: any[] = [];
+            for (let i = 0; i < chunk.length; i++) {
+              const item = chunk[i];
+              insertedFurniture.add(item.id);
+              const offset = i * 15;
+              valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15})`);
+              flatValues.push(
+                item.id,
+                item.name || "",
+                item.type || "silla",
+                item.code || null,
+                item.quantity || 1,
+                item.assignedTo || null,
+                item.workstation || null,
+                item.area || null,
+                item.status || "disponible",
+                item.condition || "bueno",
+                item.location || null,
+                item.colorMaterial || null,
+                item.notes || null,
+                item.assignedDate || null,
+                item.updatedAt || new Date().toISOString()
+              );
+            }
+            await client.query(`
+              INSERT INTO sia_furniture_items (
+                id, name, type, code, quantity, assigned_to, workstation, area, status, condition, location, color_material, notes, assigned_date, updated_at
+              ) 
+              VALUES ${valuePlaceholders.join(", ")} 
+              ON CONFLICT (id) DO UPDATE SET 
+                name = EXCLUDED.name, 
+                type = EXCLUDED.type, 
+                code = EXCLUDED.code, 
+                quantity = EXCLUDED.quantity, 
+                assigned_to = EXCLUDED.assigned_to, 
+                workstation = EXCLUDED.workstation, 
+                area = EXCLUDED.area, 
+                status = EXCLUDED.status, 
+                condition = EXCLUDED.condition, 
+                location = EXCLUDED.location, 
+                color_material = EXCLUDED.color_material, 
+                notes = EXCLUDED.notes, 
+                assigned_date = EXCLUDED.assigned_date, 
+                updated_at = EXCLUDED.updated_at
+            `, flatValues);
+          }
+        } else {
+          await client.query("DELETE FROM sia_furniture_items");
+        }
+      }
     } else if (field === "auditLogs") {
       const logsSlice = Array.isArray(value) ? value.slice(0, 500) : [];
       if (logsSlice.length === 0) {
@@ -603,6 +689,7 @@ export async function migrateAllToPostgres(poolInstance: pg.Pool, localData: any
     "licenses",
     "componentTypes",
     "inventoryItems",
+    "furnitureItems",
     "decommissionedItems",
     "equipmentLoans",
     "auditLogs",
@@ -624,6 +711,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
     const licsRes = await client.query("SELECT * FROM sia_licenses");
     const compsRes = await client.query("SELECT * FROM sia_component_types");
     const invRes = await client.query("SELECT * FROM sia_inventory_items");
+    const furnRes = await client.query("SELECT * FROM sia_furniture_items");
     const decRes = await client.query("SELECT * FROM sia_decommissioned_items");
     const loansRes = await client.query("SELECT * FROM sia_equipment_loans ORDER BY checkout_date DESC");
     const assetsRes = await client.query("SELECT * FROM sia_assets");
@@ -646,6 +734,25 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
       quantity: r.quantity,
       serial: r.serial || undefined,
       notes: r.notes || undefined,
+    }));
+
+    // Convert furniture items
+    const furnitureItems = furnRes.rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      code: r.code || undefined,
+      quantity: r.quantity,
+      assignedTo: r.assigned_to || undefined,
+      workstation: r.workstation || undefined,
+      area: r.area || undefined,
+      status: r.status,
+      condition: r.condition || undefined,
+      location: r.location || undefined,
+      colorMaterial: r.color_material || undefined,
+      notes: r.notes || undefined,
+      assignedDate: r.assigned_date || undefined,
+      updatedAt: r.updated_at || undefined,
     }));
 
     // Convert decommissioned items
@@ -739,6 +846,7 @@ export async function loadAllFromPostgres(poolInstance: pg.Pool) {
       areas,
       licenses,
       inventoryItems,
+      furnitureItems,
       equipmentLoans,
       auditLogs,
       decommissionedItems,

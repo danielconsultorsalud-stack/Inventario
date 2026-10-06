@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { X, Download, Upload, AlertTriangle, CheckCircle, Database, FileText, ChevronRight, RefreshCw, Cloud, CloudOff, Info } from "lucide-react";
-import { Area, Database as AppDatabase, License, InventoryItem, ComponentType, AuditLogEntry, EquipmentLoan } from "../types";
+import { Area, Database as AppDatabase, License, InventoryItem, ComponentType, AuditLogEntry, EquipmentLoan, FurnitureItem } from "../types";
 
 interface BackupModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface BackupModalProps {
   areas: Area[];
   licenses: License[];
   inventoryItems: InventoryItem[];
+  furnitureItems?: FurnitureItem[];
   equipmentLoans?: EquipmentLoan[];
   auditLogs: AuditLogEntry[];
   decommissionedItems: any[];
@@ -20,6 +21,7 @@ interface BackupModalProps {
     areas: Area[];
     licenses: License[];
     inventoryItems: InventoryItem[];
+    furnitureItems?: FurnitureItem[];
     equipmentLoans?: EquipmentLoan[];
     auditLogs: AuditLogEntry[];
     decommissionedItems: any[];
@@ -34,6 +36,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   areas,
   licenses,
   inventoryItems,
+  furnitureItems = [],
   equipmentLoans = [],
   auditLogs,
   decommissionedItems,
@@ -47,6 +50,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     areas?: Area[];
     licenses?: License[];
     inventoryItems?: InventoryItem[];
+    furnitureItems?: FurnitureItem[];
     equipmentLoans?: EquipmentLoan[];
     auditLogs?: AuditLogEntry[];
     decommissionedItems?: any[];
@@ -68,6 +72,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         areas,
         licenses,
         inventoryItems,
+        furnitureItems,
         equipmentLoans,
         auditLogs,
         decommissionedItems,
@@ -194,6 +199,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         areas: parsedData.areas && parsedData.areas.length > 0 ? parsedData.areas : areas,
         licenses: parsedData.licenses && parsedData.licenses.length > 0 ? parsedData.licenses : licenses,
         inventoryItems: parsedData.inventoryItems && parsedData.inventoryItems.length > 0 ? parsedData.inventoryItems : inventoryItems,
+        furnitureItems: parsedData.furnitureItems && parsedData.furnitureItems.length > 0 ? parsedData.furnitureItems : furnitureItems,
         equipmentLoans: parsedData.equipmentLoans && parsedData.equipmentLoans.length > 0 ? parsedData.equipmentLoans : equipmentLoans,
         auditLogs: parsedData.auditLogs && parsedData.auditLogs.length > 0 ? parsedData.auditLogs : [],
         decommissionedItems: parsedData.decommissionedItems && parsedData.decommissionedItems.length > 0 ? parsedData.decommissionedItems : decommissionedItems,

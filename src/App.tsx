@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Monitor, FileSpreadsheet, Plus, HelpCircle, KeyRound, ClipboardList, FileDown, Database, RefreshCw, CloudUpload, ShieldAlert, X, Pencil, Package } from "lucide-react";
-import { Area, Database as AppDatabase, AssetData, License, InventoryItem, ComponentType, AuditLogEntry, DecommissionedItem, EquipmentLoan } from "./types";
+import { Monitor, FileSpreadsheet, Plus, HelpCircle, KeyRound, ClipboardList, FileDown, Database, RefreshCw, CloudUpload, ShieldAlert, X, Pencil, Package, Armchair } from "lucide-react";
+import { Area, Database as AppDatabase, AssetData, License, InventoryItem, ComponentType, AuditLogEntry, DecommissionedItem, EquipmentLoan, FurnitureItem } from "./types";
 import { OfficeMap } from "./components/OfficeMap";
 import { AssetModal } from "./components/AssetModal";
 import { AreaManagerModal } from "./components/AreaManagerModal";
@@ -10,6 +10,7 @@ import { AuditLogModal } from "./components/AuditLogModal";
 import { BackupModal } from "./components/BackupModal";
 import { Tooltip } from "./components/Tooltip";
 import { InventoryModule } from "./components/InventoryModule";
+import { FurnitureModule } from "./components/FurnitureModule";
 import { DecommissionedModule } from "./components/DecommissionedModule";
 import { EquipmentLoansModule } from "./components/EquipmentLoansModule";
 import { EquipmentLoanPublicModal } from "./components/EquipmentLoanPublicModal";
@@ -126,6 +127,98 @@ export default function App() {
       { id: "inv-4", name: "Cámara Web Full HD Genius 1080p", type: "camara", quantity: 3, notes: "Soporte Técnico" },
     ];
   });
+
+  const [furnitureItems, setFurnitureItems] = useState<FurnitureItem[]>(() => {
+    const saved = localStorage.getItem("sia_furniture_v5");
+    return saved ? JSON.parse(saved) : [
+      {
+        id: "mob-1",
+        name: "Silla Ergonómica Sihoo M57 con Soporte Lumbar",
+        type: "silla",
+        code: "MOB-001",
+        quantity: 1,
+        assignedTo: "Carlos Pérez",
+        workstation: "Oficina Carlos (Puesto Principal)",
+        area: "Desarrollo TI",
+        status: "asignado",
+        condition: "excelente",
+        location: "Oficina Carlos",
+        colorMaterial: "Malla Negra / Base Aluminio",
+        notes: "Malla transpirable con reposacabezas y brazos 3D",
+        assignedDate: new Date().toISOString(),
+      },
+      {
+        id: "mob-2",
+        name: "Escritorio Elevable Standing Desk 140x70cm",
+        type: "escritorio",
+        code: "MOB-002",
+        quantity: 1,
+        assignedTo: "Carlos Pérez",
+        workstation: "Oficina Carlos (Puesto Principal)",
+        area: "Desarrollo TI",
+        status: "asignado",
+        condition: "nuevo",
+        location: "Oficina Carlos",
+        colorMaterial: "Melamina Roble / Marco Negro",
+        notes: "Motor eléctrico dual con panel táctil y memorias",
+        assignedDate: new Date().toISOString(),
+      },
+      {
+        id: "mob-3",
+        name: "Cajonera Metálica Rodante con Llave 3 Gavetas",
+        type: "cajonera",
+        code: "MOB-003",
+        quantity: 1,
+        assignedTo: "Carlos Pérez",
+        workstation: "Oficina Carlos (Puesto Principal)",
+        area: "Desarrollo TI",
+        status: "asignado",
+        condition: "bueno",
+        location: "Oficina Carlos",
+        colorMaterial: "Metal Negro",
+        notes: "Cierre centralizado con llave maestra",
+        assignedDate: new Date().toISOString(),
+      },
+      {
+        id: "mob-4",
+        name: "Mesa de Reuniones Ovalada 8 Puestos",
+        type: "mesa_reuniones",
+        code: "MOB-004",
+        quantity: 1,
+        status: "disponible",
+        condition: "excelente",
+        location: "Sala de Juntas",
+        colorMaterial: "Madera Nogal / Pasantenas",
+        notes: "Caja de conectividad con enchufes y RJ45",
+      },
+      {
+        id: "mob-5",
+        name: "Sillas Operativas de Malla Ergonómicas",
+        type: "silla",
+        code: "MOB-005",
+        quantity: 4,
+        status: "disponible",
+        condition: "nuevo",
+        location: "Bodega de Mobiliario",
+        colorMaterial: "Malla Gris",
+        notes: "Stock libre para nuevas asignaciones a colaboradores",
+      },
+      {
+        id: "mob-6",
+        name: "Archivador Metálico 4 Gavetas de Seguridad",
+        type: "archivador",
+        code: "MOB-006",
+        quantity: 1,
+        status: "disponible",
+        condition: "bueno",
+        location: "Oficina Gerencia",
+        colorMaterial: "Gris Grafito",
+        notes: "Para custodia de documentos administrativos y legales",
+      },
+    ];
+  });
+
+  const [inventorySubModule, setInventorySubModule] = useState<"hardware" | "furniture">("hardware");
 
   // Modal Asset Settings
   const [selectedPuesto, setSelectedPuesto] = useState<{ id: string; label: string } | null>(null);
@@ -494,6 +587,7 @@ export default function App() {
             setAreas(serverData.areas || DEFAULT_AREAS);
             setLicenses(serverData.licenses || []);
             setInventoryItems(serverData.inventoryItems || []);
+            setFurnitureItems(serverData.furnitureItems || []);
             setAuditLogs(serverData.auditLogs || []);
             setDecommissionedItems(serverData.decommissionedItems || []);
           }
@@ -533,6 +627,92 @@ export default function App() {
                 { id: "inv-2", name: "Teclado Redragon Dragonborn K630", type: "teclado", quantity: 3, notes: "Estante Auxiliar 2" },
                 { id: "inv-4", name: "Cámara Web Full HD Genius 1080p", type: "camara", quantity: 3, notes: "Soporte Técnico" },
               ],
+              furnitureItems: hasLocalData ? JSON.parse(localStorage.getItem("sia_furniture_v5") || "[]") : [
+                {
+                  id: "mob-1",
+                  name: "Silla Ergonómica Sihoo M57 con Soporte Lumbar",
+                  type: "silla",
+                  code: "MOB-001",
+                  quantity: 1,
+                  assignedTo: "Carlos Pérez",
+                  workstation: "Oficina Carlos (Puesto Principal)",
+                  area: "Desarrollo TI",
+                  status: "asignado",
+                  condition: "excelente",
+                  location: "Oficina Carlos",
+                  colorMaterial: "Malla Negra / Base Aluminio",
+                  notes: "Malla transpirable con reposacabezas y brazos 3D",
+                  assignedDate: new Date().toISOString(),
+                },
+                {
+                  id: "mob-2",
+                  name: "Escritorio Elevable Standing Desk 140x70cm",
+                  type: "escritorio",
+                  code: "MOB-002",
+                  quantity: 1,
+                  assignedTo: "Carlos Pérez",
+                  workstation: "Oficina Carlos (Puesto Principal)",
+                  area: "Desarrollo TI",
+                  status: "asignado",
+                  condition: "nuevo",
+                  location: "Oficina Carlos",
+                  colorMaterial: "Melamina Roble / Marco Negro",
+                  notes: "Motor dual con memoria de altura",
+                  assignedDate: new Date().toISOString(),
+                },
+                {
+                  id: "mob-3",
+                  name: "Cajonera Metálica Rodante con Llave 3 Gavetas",
+                  type: "cajonera",
+                  code: "MOB-003",
+                  quantity: 1,
+                  assignedTo: "Carlos Pérez",
+                  workstation: "Oficina Carlos (Puesto Principal)",
+                  area: "Desarrollo TI",
+                  status: "asignado",
+                  condition: "bueno",
+                  location: "Oficina Carlos",
+                  colorMaterial: "Metal Negro",
+                  notes: "Cierre centralizado con llave",
+                  assignedDate: new Date().toISOString(),
+                },
+                {
+                  id: "mob-4",
+                  name: "Mesa de Reuniones Ovalada 8 Puestos",
+                  type: "mesa_reuniones",
+                  code: "MOB-004",
+                  quantity: 1,
+                  status: "disponible",
+                  condition: "excelente",
+                  location: "Sala de Juntas",
+                  colorMaterial: "Madera Nogal / Pasantenas",
+                  notes: "Caja de conectividad con enchufes y RJ45",
+                },
+                {
+                  id: "mob-5",
+                  name: "Sillas Operativas de Malla Ergonómicas",
+                  type: "silla",
+                  code: "MOB-005",
+                  quantity: 4,
+                  status: "disponible",
+                  condition: "nuevo",
+                  location: "Bodega de Mobiliario",
+                  colorMaterial: "Malla Gris",
+                  notes: "Stock libre para nuevas asignaciones a colaboradores",
+                },
+                {
+                  id: "mob-6",
+                  name: "Archivador Metálico 4 Gavetas de Seguridad",
+                  type: "archivador",
+                  code: "MOB-006",
+                  quantity: 1,
+                  status: "disponible",
+                  condition: "bueno",
+                  location: "Oficina Gerencia",
+                  colorMaterial: "Gris Grafito",
+                  notes: "Para custodia de documentos administrativos y legales",
+                },
+              ],
               auditLogs: hasLocalData ? JSON.parse(localStorage.getItem("sia_audit_logs_v5") || "[]") : [
                 {
                   id: "initial-log",
@@ -557,6 +737,7 @@ export default function App() {
             setAreas(seedPayload.areas);
             setLicenses(seedPayload.licenses);
             setInventoryItems(seedPayload.inventoryItems);
+            setFurnitureItems(seedPayload.furnitureItems || []);
             setEquipmentLoans(seedPayload.equipmentLoans || []);
             setAuditLogs(seedPayload.auditLogs);
             setDecommissionedItems(seedPayload.decommissionedItems || []);
@@ -566,6 +747,7 @@ export default function App() {
             setAreas(serverData.areas || DEFAULT_AREAS);
             setLicenses(serverData.licenses || []);
             setInventoryItems(serverData.inventoryItems || []);
+            setFurnitureItems(serverData.furnitureItems || []);
             setEquipmentLoans(serverData.equipmentLoans || []);
             setAuditLogs(serverData.auditLogs || []);
             setDecommissionedItems(serverData.decommissionedItems || []);
@@ -598,6 +780,7 @@ export default function App() {
               if (parsed.field === "areas") setAreas(parsed.value);
               if (parsed.field === "licenses") setLicenses(parsed.value);
               if (parsed.field === "inventoryItems") setInventoryItems(parsed.value);
+              if (parsed.field === "furnitureItems") setFurnitureItems(parsed.value);
               if (parsed.field === "equipmentLoans") setEquipmentLoans(parsed.value);
               if (parsed.field === "auditLogs") setAuditLogs(parsed.value);
               if (parsed.field === "decommissionedItems") setDecommissionedItems(parsed.value);
@@ -663,6 +846,16 @@ export default function App() {
       }, 1200);
     }
   }, [inventoryItems]);
+
+  useEffect(() => {
+    localStorage.setItem("sia_furniture_v5", JSON.stringify(furnitureItems));
+    if (!isIncomingUpdate.current) {
+      if (syncTimeoutRefs.current["furnitureItems"]) clearTimeout(syncTimeoutRefs.current["furnitureItems"]);
+      syncTimeoutRefs.current["furnitureItems"] = setTimeout(() => {
+        sendUpdate("furnitureItems", furnitureItems);
+      }, 1200);
+    }
+  }, [furnitureItems]);
 
   useEffect(() => {
     localStorage.setItem("sia_component_types_v5", JSON.stringify(componentTypes));
@@ -733,6 +926,7 @@ export default function App() {
     areas: Area[];
     licenses: License[];
     inventoryItems: InventoryItem[];
+    furnitureItems?: FurnitureItem[];
     equipmentLoans?: EquipmentLoan[];
     auditLogs: AuditLogEntry[];
     decommissionedItems?: any[];
@@ -742,6 +936,9 @@ export default function App() {
     setAreas(backupData.areas);
     setLicenses(backupData.licenses);
     setInventoryItems(backupData.inventoryItems);
+    if (backupData.furnitureItems) {
+      setFurnitureItems(backupData.furnitureItems);
+    }
     if (backupData.equipmentLoans) {
       setEquipmentLoans(backupData.equipmentLoans);
     }
@@ -853,6 +1050,100 @@ export default function App() {
         .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
     )
   );
+
+  // Handle Furniture Operations (Módulo Separado de Mobiliario y Enseres)
+  const handleAddFurnitureItem = (item: Omit<FurnitureItem, "id" | "updatedAt">) => {
+    const newItem: FurnitureItem = {
+      ...item,
+      id: `mob-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      updatedAt: new Date().toISOString(),
+    };
+    setFurnitureItems((prev) => [newItem, ...prev]);
+    logEvent(
+      "CREAR_MOBILIARIO",
+      `Se registró el mueble "${item.name}" (${item.type}) con ${item.quantity} unidad(es)${
+        item.assignedTo ? ` asignado al colaborador "${item.assignedTo}"` : " en bodega general"
+      }.`
+    );
+  };
+
+  const handleUpdateFurnitureItem = (updated: FurnitureItem) => {
+    setFurnitureItems((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item))
+    );
+    logEvent(
+      "ACTUALIZAR_MOBILIARIO",
+      `Se modificó la ficha del mueble "${updated.name}" (${updated.code || updated.id})${
+        updated.assignedTo ? `, asignado a "${updated.assignedTo}"` : ""
+      }.`
+    );
+  };
+
+  const handleDeleteFurnitureItem = (id: string) => {
+    const item = furnitureItems.find((i) => i.id === id);
+    setFurnitureItems((prev) => prev.filter((i) => i.id !== id));
+    if (item) {
+      logEvent(
+        "ELIMINAR_MOBILIARIO",
+        `Se eliminó del catálogo de mobiliario el activo "${item.name}" (${item.code || id}).`
+      );
+    }
+  };
+
+  const handleQuickAssignFurniture = (
+    id: string,
+    employeeName: string,
+    workstation?: string,
+    area?: string
+  ) => {
+    setFurnitureItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            assignedTo: employeeName,
+            status: "asignado",
+            workstation: workstation || item.workstation,
+            area: area || item.area,
+            assignedDate: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return item;
+      })
+    );
+    const item = furnitureItems.find((i) => i.id === id);
+    logEvent(
+      "ASIGNAR_MOBILIARIO",
+      `Se asignó el mueble "${item?.name || id}" al colaborador "${employeeName}" (${area || "Área General"}).`
+    );
+  };
+
+  const handleQuickUnassignFurniture = (id: string) => {
+    let unassignedName = "";
+    let prevEmployee = "";
+    setFurnitureItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          unassignedName = item.name;
+          prevEmployee = item.assignedTo || "";
+          return {
+            ...item,
+            assignedTo: undefined,
+            status: "disponible",
+            location: "Bodega de Mobiliario",
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return item;
+      })
+    );
+    logEvent(
+      "LIBERAR_MOBILIARIO",
+      `Se liberó y devolvió a bodega el mueble "${unassignedName || id}" (previamente asignado a "${prevEmployee || "colaborador"}").`
+    );
+  };
+
   const handleAddComponentType = (name: string, icon: string) => {
     // Generate an ID based on sanitized name to prevent collisions but be readable
     const safeId = name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
@@ -1477,6 +1768,23 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => {
+                  setInventorySubModule("furniture");
+                  const el = document.getElementById("module-inventory");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs relative"
+                title="Ver inventario de mobiliario y enseres asignados al personal"
+              >
+                <Armchair size={12} className="text-amber-700" /> Mobiliario
+                {furnitureItems.length > 0 && (
+                  <span className="bg-amber-100 text-amber-900 rounded-full font-mono text-[8px] font-black px-1.5 py-0.2 border border-amber-200">
+                    {furnitureItems.length}
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setIsAreaManagerOpen(true)}
                 className="flex-1 sm:flex-initial bg-white hover:bg-slate-100/80 border border-slate-200/60 text-slate-700 hover:text-slate-900 px-3.5 py-2.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
@@ -1729,18 +2037,87 @@ export default function App() {
         </div>
 
         {/* MODULO DE INVENTARIO */}
-        <div className="border-t border-slate-200 pt-8">
-          <InventoryModule
-            items={inventoryItems}
-            database={database}
-            componentTypes={componentTypes}
-            onAddItem={handleAddInventoryItem}
-            onUpdateQuantity={handleUpdateInventoryQuantity}
-            onDeleteItem={handleDeleteInventoryItem}
-            onOpenComponentTypeManager={() => setIsComponentTypeManagerOpen(true)}
-            onUpdateItem={handleUpdateInventoryItem}
-            onDecommissionItem={handleDecommissionItem}
-          />
+        <div id="module-inventory" className="border-t border-slate-200 pt-8 space-y-6">
+          {/* Pestañas Selectoras de Sub-Módulos de Inventario */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-3 md:p-4 rounded-[2rem] shadow-sm">
+            <div className="flex items-center gap-2 pl-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest font-mono text-slate-400">
+                Secciones de Inventario:
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setInventorySubModule("hardware")}
+                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  inventorySubModule === "hardware"
+                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                }`}
+              >
+                <Monitor size={15} className="text-red-700" />
+                <span>Equipos y Componentes TI</span>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                    inventorySubModule === "hardware"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {inventoryItems.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInventorySubModule("furniture")}
+                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  inventorySubModule === "furniture"
+                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                }`}
+              >
+                <Armchair size={15} className="text-amber-700" />
+                <span>Mobiliario y Enseres</span>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                    inventorySubModule === "furniture"
+                      ? "bg-amber-100 text-amber-900"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {furnitureItems.length}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {inventorySubModule === "hardware" ? (
+            <InventoryModule
+              items={inventoryItems}
+              database={database}
+              componentTypes={componentTypes}
+              onAddItem={handleAddInventoryItem}
+              onUpdateQuantity={handleUpdateInventoryQuantity}
+              onDeleteItem={handleDeleteInventoryItem}
+              onOpenComponentTypeManager={() => setIsComponentTypeManagerOpen(true)}
+              onUpdateItem={handleUpdateInventoryItem}
+              onDecommissionItem={handleDecommissionItem}
+            />
+          ) : (
+            <FurnitureModule
+              items={furnitureItems}
+              knownEmployees={knownEmployees}
+              areas={areas}
+              database={database}
+              onAddItem={handleAddFurnitureItem}
+              onUpdateItem={handleUpdateFurnitureItem}
+              onDeleteItem={handleDeleteFurnitureItem}
+              onQuickAssign={handleQuickAssignFurniture}
+              onQuickUnassign={handleQuickUnassignFurniture}
+            />
+          )}
         </div>
 
         {/* MODULO DE EQUIPOS DADOS DE BAJA */}
@@ -1830,6 +2207,7 @@ export default function App() {
         areas={areas}
         licenses={licenses}
         inventoryItems={inventoryItems}
+        furnitureItems={furnitureItems}
         equipmentLoans={equipmentLoans}
         auditLogs={auditLogs}
         decommissionedItems={decommissionedItems}
